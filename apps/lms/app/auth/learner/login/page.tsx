@@ -83,7 +83,7 @@ export default function UserLoginPage() {
     <div className="flex justify-center items-center min-h-screen bg-background px-4 sm:px-6 py-6 sm:py-8">
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
         <div className="text-center">
-          <Logo className="mx-auto mb-4 sm:mb-6 w-full max-w-[100px] sm:max-w-[120px]" />
+          <Logo className="mx-auto mb-4 sm:mb-6 w-full max-w-[260px] sm:max-w-[340px]" />
         </div>
         <Card className="w-full">
           <CardHeader className="p-4 sm:p-6">

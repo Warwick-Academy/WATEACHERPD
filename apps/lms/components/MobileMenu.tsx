@@ -104,7 +104,7 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
             </Avatar>
           )}
         </Button>
-        <Logo className="max-w-[100px]" />
+        <Logo className="max-w-[220px]" />
         <div className="w-10" />
       </header>
     )
