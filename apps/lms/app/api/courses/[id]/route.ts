@@ -384,7 +384,7 @@ export async function GET(
               allowMultipleAttempts: quizSettingsData.allow_multiple_attempts !== undefined ? quizSettingsData.allow_multiple_attempts : true,
               shuffleQuiz: quizSettingsData.shuffle_quiz || false,
               timeLimit: quizSettingsData.time_limit || null,
-              passingScore: quizSettingsData.passing_score || null,
+              passingScore: quizSettingsData.passing_score ?? null,
             }
           } else {
             // Default settings if no settings record exists
@@ -700,7 +700,7 @@ export async function GET(
           instructorEnabled: instructors.length > 0, // Enabled if there are instructors
           instructorIds: instructors.map((i: any) => i.id),
         },
-        minimumQuizScore: course.minimum_quiz_score || null,
+        minimumQuizScore: course.minimum_quiz_score ?? null,
         requiresSequentialProgress: course.requires_sequential_progress || false,
       },
     }

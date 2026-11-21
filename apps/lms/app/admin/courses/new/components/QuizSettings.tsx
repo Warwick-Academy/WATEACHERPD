@@ -5,13 +5,16 @@ import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Quiz } from "../types/quiz"
+import { useId } from "react"
 
 interface QuizSettingsProps {
   quiz: Quiz
   onChange: (quiz: Quiz) => void
+  minimumQuizScore: number
 }
 
-export default function QuizSettings({ quiz, onChange }: QuizSettingsProps) {
+export default function QuizSettings({ quiz, onChange, minimumQuizScore }: QuizSettingsProps) {
+  const passingScoreId = useId()
   const updateSetting = (key: keyof Quiz, value: any) => {
     onChange({ ...quiz, [key]: value })
   }
@@ -22,6 +25,32 @@ export default function QuizSettings({ quiz, onChange }: QuizSettingsProps) {
         <CardTitle className="text-base">Quiz Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor={passingScoreId}>Passing Score (%)</Label>
+          <Input
+            id={passingScoreId}
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={quiz.passingScore ?? ""}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === "") {
+                updateSetting("passingScore", null)
+              } else {
+                const score = Number(value)
+                if (Number.isInteger(score) && score >= 0 && score <= 100) {
+                  updateSetting("passingScore", score)
+                }
+              }
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave blank to use the course minimum of {minimumQuizScore}%
+          </p>
+        </div>
+
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label>Show Correct Answers</Label>

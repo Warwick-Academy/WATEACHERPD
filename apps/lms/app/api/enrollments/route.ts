@@ -1,6 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { hasPassedCourseQuizzes } from "@/lib/quiz/course-eligibility"
 
 export async function GET() {
   try {
@@ -346,6 +347,22 @@ export async function PATCH(request: Request) {
       courseId,
     })
     return NextResponse.json({ error: "Enrollment not found" }, { status: 404 })
+  }
+
+  if (status === "completed" && existingEnrollment.status !== "completed") {
+    try {
+      if (!await hasPassedCourseQuizzes(serviceSupabase, user.id, Number(courseId))) {
+        return NextResponse.json({ error: "Pass all course quizzes before completing this course" }, { status: 400 })
+      }
+    } catch (error) {
+      logError("Error checking course quiz results", error, {
+        component: "enrollments/route",
+        action: "PATCH",
+        userId: user.id,
+        courseId,
+      })
+      return NextResponse.json({ error: "Could not verify quiz results" }, { status: 500 })
+    }
   }
 
   // Update enrollment with status and completed_at

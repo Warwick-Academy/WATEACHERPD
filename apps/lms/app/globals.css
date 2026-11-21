@@ -4,48 +4,49 @@
 
 @layer base {
   :root {
+    /* Warwick Academy brand: navy #17406E, light blue #AACFE9 */
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 212 50% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 212 50% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 212 50% 14%;
+    --primary: 212 65.4% 26.1%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 205 58.9% 93%;
+    --secondary-foreground: 212 65.4% 26.1%;
+    --muted: 210 30% 96%;
+    --muted-foreground: 212 15% 42%;
+    --accent: 205 58.9% 90%;
+    --accent-foreground: 212 65.4% 26.1%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --border: 210 25% 88%;
+    --input: 210 25% 88%;
+    --ring: 212 65.4% 26.1%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 214 45% 7%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 214 42% 10%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 214 42% 10%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
+    --primary: 205 58.9% 79%;
+    --primary-foreground: 212 65.4% 16%;
+    --secondary: 212 40% 17%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --muted: 212 35% 15%;
+    --muted-foreground: 210 20% 68%;
+    --accent: 212 45% 20%;
+    --accent-foreground: 205 58.9% 85%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 212 35% 18%;
+    --input: 212 35% 18%;
+    --ring: 205 58.9% 79%;
   }
 
   /* Opacity variants for bg-background */
@@ -130,11 +131,11 @@ body {
 
 /* Gradient backgrounds */
 .bg-gradient-primary {
-  @apply bg-gradient-to-r from-blue-500 to-purple-600;
+  background-image: linear-gradient(to right, #17406E, #2C6AA8);
 }
 
 .dark .bg-gradient-primary {
-  @apply from-blue-700 to-purple-800;
+  background-image: linear-gradient(to right, #0F2C4D, #17406E);
 }
 
 /* Subtle hover effects */

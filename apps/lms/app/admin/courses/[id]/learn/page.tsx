@@ -246,7 +246,7 @@ export default function AdminCourseLearningPage() {
       }
       
       scorePercentage = (correctCount / answers.length) * 100
-      const minimumScore = course?.settings?.minimumQuizScore || 50
+      const minimumScore = lesson.quiz?.passingScore ?? course?.settings?.minimumQuizScore ?? 50
       quizPassed = scorePercentage >= minimumScore
       
       // Set quiz score locally
@@ -586,11 +586,12 @@ export default function AdminCourseLearningPage() {
                             allowMultipleAttempts: currentLesson.quiz?.allowMultipleAttempts || true,
                             showCorrectAnswers: currentLesson.quiz?.showCorrectAnswers || true,
                             maxAttempts: currentLesson.quiz?.maxAttempts || 3,
+                            passingScore: currentLesson.quiz?.passingScore,
                           }}
                           onComplete={handleQuizComplete}
                           onContinue={handleContinueFromQuiz}
                           onRetry={() => clearQuizData(currentLesson.id)}
-                          minimumQuizScore={course?.settings?.minimumQuizScore || course?.settings?.certificate?.minimumQuizScore || 50}
+                          minimumQuizScore={course?.settings?.minimumQuizScore ?? 50}
                           courseId={id}
                           lessonId={currentLesson.id}
                           showResultsOnly={completedQuizzes[currentLesson.id]}

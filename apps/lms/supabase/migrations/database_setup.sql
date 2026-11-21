@@ -698,9 +698,7 @@ CREATE POLICY "Users can view their own quiz results"
   ON quiz_results FOR SELECT
   USING (user_id = auth.uid());
 
-CREATE POLICY "Users can create their own quiz results"
-  ON quiz_results FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+REVOKE INSERT, UPDATE, DELETE ON public.quiz_results FROM PUBLIC, anon, authenticated;
 
 -- Enrollments policies
 CREATE POLICY "Users can view their own enrollments"

@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { getQuizPercentage } from "@/lib/quiz/grading"
 
 interface UseQuizDataProps {
   quizResultsData?: {
@@ -125,10 +126,20 @@ export function useQuizData({ quizResultsData, progressData, course }: UseQuizDa
               answersMap[lessonIdNum] = answersArray.filter((a: any) => a !== null && !isNaN(a)) as number[]
             }
             
-            // Calculate score for this lesson
-            const lessonProgress = progressData.progress.find((p: any) => p.lesson_id === lessonIdNum)
-            if (lessonProgress && lessonProgress.quiz_score !== null && lessonProgress.quiz_score !== undefined) {
-              scoresMap[lessonIdNum] = lessonProgress.quiz_score
+            const score = getQuizPercentage(
+              questions.map((question: any) => ({
+                id: Number(question.id),
+                question_type: question.type,
+                question_data: question,
+                points: question.points,
+              })),
+              results.map((result: any) => ({
+                quiz_question_id: result.quiz_question_id,
+                user_answer: result.user_answer,
+              }))
+            )
+            if (score !== null) {
+              scoresMap[lessonIdNum] = score
             }
           }
         }

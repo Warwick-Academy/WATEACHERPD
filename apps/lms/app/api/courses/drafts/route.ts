@@ -45,6 +45,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Course data is required" }, { status: 400 })
     }
 
+    for (const lesson of courseData.lessons || []) {
+      const passingScore = lesson.quiz?.passingScore
+      if (passingScore != null && (!Number.isInteger(passingScore) || passingScore < 0 || passingScore > 100)) {
+        return NextResponse.json({ error: "Quiz passing score must be a whole number from 0 to 100" }, { status: 400 })
+      }
+    }
+
     // Transform course data to match database schema
     // The schema uses flat columns, not a nested settings object
     const settings = courseData.settings || {}
@@ -485,7 +492,7 @@ export async function POST(request: Request) {
           show_correct_answers: quiz?.showCorrectAnswers !== undefined ? quiz.showCorrectAnswers : true,
           allow_multiple_attempts: quiz?.allowMultipleAttempts !== undefined ? quiz.allowMultipleAttempts : true,
           time_limit: quiz?.timeLimit || null,
-          passing_score: quiz?.passingScore || null,
+          passing_score: quiz?.passingScore ?? null,
           updated_at: new Date().toISOString(),
         }
 
@@ -502,6 +509,7 @@ export async function POST(request: Request) {
             action: "POST",
             lessonId: actualLessonId,
           })
+          return NextResponse.json({ error: "Failed to save quiz settings" }, { status: 500 })
         }
 
         // If quiz has no questions, we still need to save settings (but keep existing questions)
@@ -1298,7 +1306,7 @@ export async function GET(request: Request) {
             showCorrectAnswers: settings.show_correct_answers !== undefined ? settings.show_correct_answers : true,
             allowMultipleAttempts: settings.allow_multiple_attempts !== undefined ? settings.allow_multiple_attempts : true,
             timeLimit: settings.time_limit || null,
-            passingScore: settings.passing_score || null,
+            passingScore: settings.passing_score ?? null,
           })
         }
       }
@@ -1456,7 +1464,7 @@ export async function GET(request: Request) {
         instructorEnabled: instructorIds.length > 0,
         instructorIds: instructorIds,
       },
-      minimumQuizScore: data.minimum_quiz_score || null,
+      minimumQuizScore: data.minimum_quiz_score ?? null,
       requiresSequentialProgress: data.requires_sequential_progress || false,
       currency: data.currency || "USD",
       isPublished: data.is_published || false,

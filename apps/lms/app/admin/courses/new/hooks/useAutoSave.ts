@@ -293,7 +293,7 @@ export function useAutoSave<T>({
       settings: {
         isPublished: dbCourse.is_published || false,
         requiresSequentialProgress: dbCourse.requires_sequential_progress !== undefined ? dbCourse.requires_sequential_progress : true,
-        minimumQuizScore: dbCourse.minimum_quiz_score !== undefined ? dbCourse.minimum_quiz_score : 50,
+        minimumQuizScore: dbCourse.minimum_quiz_score ?? 50,
         enrollment: {
           enrollmentMode: dbCourse.enrollment_mode || "free",
           price: dbCourse.price !== undefined ? dbCourse.price : undefined,

@@ -212,6 +212,11 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - Deploy the LMS before changing the template. The confirmation page requires a button click before consuming the single-use token, preventing email scanners from consuming it by simply opening the link.
       - Existing confirmation links do not change; request a fresh email at `/auth/confirm` after updating the template. Confirm that the database setup and profile-creation trigger are installed before accepting signups.
 
+   f. **Configure quiz results for an existing database**
+      - Apply `apps/lms/supabase/migrations/20261121010000_protect_quiz_results.sql` in the Supabase SQL Editor. This prevents learners from writing quiz results directly; the server grades and records them.
+      - Configure `SUPABASE_SERVICE_ROLE_KEY` on the LMS server. Never expose this key to the browser. The quiz-results and certificate routes require it.
+      - Each quiz can optionally override the course minimum passing score. New completions and certificates require a passing result for every enabled quiz; previously issued certificates are unchanged.
+
 5. **Start the development server**
    ```bash
    npm run dev

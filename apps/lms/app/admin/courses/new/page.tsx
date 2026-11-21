@@ -284,7 +284,7 @@ function NewCourseContent() {
                       maxAttempts: lesson.quiz.maxAttempts ?? 3,
                       shuffleQuiz: lesson.quiz.shuffleQuiz ?? false,
                       timeLimit: lesson.quiz.timeLimit || null,
-                      passingScore: lesson.quiz.passingScore || null,
+                      passingScore: lesson.quiz.passingScore ?? null,
                     } : {
                       enabled: false,
                       questions: [],
@@ -313,7 +313,7 @@ function NewCourseContent() {
                 settings: {
                   isPublished: course.is_published || false,
                   requiresSequentialProgress: course.requires_sequential_progress !== undefined ? course.requires_sequential_progress : true,
-                  minimumQuizScore: course.minimum_quiz_score !== undefined ? course.minimum_quiz_score : 50,
+                  minimumQuizScore: course.minimum_quiz_score ?? 50,
                   enrollment: {
                     enrollmentMode: course.enrollment_mode || "free",
                     price: course.price !== undefined ? course.price : undefined,

@@ -1,6 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { hasPassedCourseQuizzes } from "@/lib/quiz/course-eligibility"
 
 // Route segment config
 export const dynamic = 'force-dynamic'
@@ -273,6 +274,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ 
         error: "Course must be completed before certificate can be issued"
       }, { status: 400 })
+    }
+
+    try {
+      if (!await hasPassedCourseQuizzes(serviceSupabase, user.id, numericCourseId)) {
+        return NextResponse.json({ error: "Pass all course quizzes before a certificate can be issued" }, { status: 400 })
+      }
+    } catch (error) {
+      logError("Error checking certificate quiz results", error, {
+        component: "certificates/route",
+        action: "POST",
+        userId: user.id,
+        courseId: numericCourseId,
+      })
+      return NextResponse.json({ error: "Could not verify quiz results" }, { status: 500 })
     }
 
     // Check if certificate is enabled for this course

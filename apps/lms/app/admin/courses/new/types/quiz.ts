@@ -59,5 +59,6 @@ export interface Quiz {
   maxAttempts?: number
   showCorrectAnswers?: boolean
   shuffleQuiz?: boolean // Shuffle question and answer order for each learner
+  passingScore?: number | null
 }
 

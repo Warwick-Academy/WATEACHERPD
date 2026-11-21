@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { extractIdFromSlug } from "@/lib/slug"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { isQuizAnswerCorrect } from "@/lib/quiz/grading"
 
 export async function GET(
   request: Request,
@@ -132,6 +133,45 @@ export async function POST(
       .select("*")
       .eq("lesson_id", lessonId)
       .order("order_index", { ascending: true })
+
+    if (questionsError) {
+      logError("Error fetching quiz questions", questionsError, {
+        component: "courses/[id]/quiz-results/route",
+        action: "POST",
+        courseId,
+        lessonId,
+      })
+      return NextResponse.json({ error: "Failed to load quiz questions" }, { status: 500 })
+    }
+
+    const { data: lesson, error: lessonError } = await serviceSupabase
+      .from("lessons")
+      .select("id")
+      .eq("id", lessonId)
+      .eq("course_id", courseId)
+      .maybeSingle()
+    if (lessonError) {
+      logError("Error fetching quiz lesson", lessonError, {
+        component: "courses/[id]/quiz-results/route",
+        action: "POST",
+        courseId,
+        lessonId,
+      })
+      return NextResponse.json({ error: "Failed to verify quiz lesson" }, { status: 500 })
+    }
+    if (!lesson) {
+      return NextResponse.json({ error: "Quiz lesson not found in this course" }, { status: 400 })
+    }
+    const questionIds = new Set((dbQuestions || []).map((question) => String(question.id)))
+    const answerIds = answers.map((answer: { questionId?: unknown }) => String(answer.questionId))
+    if (
+      questionIds.size === 0 ||
+      answerIds.length !== questionIds.size ||
+      new Set(answerIds).size !== questionIds.size ||
+      answerIds.some((answerId: string) => !questionIds.has(answerId))
+    ) {
+      return NextResponse.json({ error: "Submit exactly one answer for every quiz question" }, { status: 400 })
+    }
 
     let quizQuestions: any[] = []
 
@@ -500,37 +540,7 @@ export async function POST(
       // Determine if answer is correct based on question type
       // Note: If shuffled, only questions are shuffled, NOT answers
       // Answers stay in original order, so we compare directly using original correctOption
-      let isCorrect = false
-      const qType = question.type || "multiple-choice" || "multiple_choice"
-      
-      if (qType === "multiple-choice" || qType === "multiple_choice") {
-        // For multiple choice, compare with correctOption (already in shuffled position if shuffled)
-        const correctAnswer = question.correctOption !== undefined ? question.correctOption : question.correct_answer
-        isCorrect = correctAnswer === answer.userAnswer
-        logInfo(`Question ${i} (multiple-choice)`, { correctAnswer, userAnswer: answer.userAnswer, isCorrect })
-      } else if (qType === "true-false" || qType === "true_false") {
-        const correctAnswer = question.correctOption !== undefined ? question.correctOption : question.correct_answer
-        isCorrect = correctAnswer === answer.userAnswer
-      } else if (qType === "fill-blank" || qType === "fill_blank") {
-        const correctAnswers = Array.isArray(question.correctAnswers)
-          ? question.correctAnswers
-          : (question.correct_answers ? (Array.isArray(question.correct_answers) ? question.correct_answers : [question.correct_answers]) : [])
-        isCorrect = correctAnswers.some(
-          (ca: any) => ca.toString().toLowerCase() === answer.userAnswer?.toString().toLowerCase()
-        )
-      } else if (qType === "short-answer" || qType === "short_answer") {
-        // For short answer, check if user answer contains keywords
-        const correctKeywords = Array.isArray(question.correctKeywords)
-          ? question.correctKeywords
-          : (question.correct_keywords ? (Array.isArray(question.correct_keywords) ? question.correct_keywords : [question.correct_keywords]) : [])
-        const userAnswerLower = answer.userAnswer?.toString().toLowerCase() || ""
-        isCorrect = correctKeywords.some((keyword: any) =>
-          userAnswerLower.includes(keyword.toString().toLowerCase())
-        )
-      } else {
-        // For essay and other types, default to false or handle differently
-        isCorrect = false
-      }
+      const isCorrect = isQuizAnswerCorrect(question.type || "multiple-choice", question, answer.userAnswer)
 
       if (isCorrect) correctCount++
 

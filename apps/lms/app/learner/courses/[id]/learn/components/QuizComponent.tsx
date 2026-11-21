@@ -12,6 +12,7 @@ import SafeImage from "@/components/SafeImage"
 import { logError, logInfo, logWarning, formatErrorMessage, handleApiError } from "../utils/errorHandler"
 import { toast } from "sonner"
 import { useQuizAttempt } from "@/lib/react-query/hooks/useQuizAttempts"
+import { getPassingScore } from "@/lib/quiz/passing-score"
 
 interface QuizQuestion {
   question: string
@@ -29,6 +30,7 @@ interface QuizProps {
     allowMultipleAttempts?: boolean
     showCorrectAnswers?: boolean
     maxAttempts?: number
+    passingScore?: number | null
   }
   onComplete: (answers?: number[], questions?: QuizQuestion[], attemptCount?: number) => void
   onContinue?: () => void
@@ -61,6 +63,7 @@ export default function QuizComponent({
   previewMode = false,
   disabled = false,
 }: QuizProps) {
+  const passingScore = getPassingScore(quiz.passingScore, minimumQuizScore)
   // Use questions - if shuffled, reorder based on shuffleData.questionOrder for consistency
   const questions = useMemo(() => {
     const rawQuestions = quiz.questions || []
@@ -329,7 +332,7 @@ export default function QuizComponent({
         action: "submitQuizResults",
         courseId,
         lessonId,
-        answersCount: answers.length,
+        answersCount: selectedAnswers.length,
       })
       const errorMessage = formatErrorMessage(error, "Failed to save quiz results")
       setSubmissionError(errorMessage)
@@ -356,8 +359,10 @@ export default function QuizComponent({
       setSubmitting(true)
       
       // Submit quiz results to API first
+      let submitted = false
       try {
         await submitQuizResults()
+        submitted = true
       } catch (error: any) {
         // Log error but still show results screen
         logError("Error submitting quiz results", error, {
@@ -385,6 +390,7 @@ export default function QuizComponent({
       // This must be called to save to progress table and complete the lesson
       // Wrap in try-catch to prevent errors from breaking the UI
       try {
+        if (!submitted) return
         const nextAttemptNumber = currentAttemptNumber > 0 ? currentAttemptNumber + 1 : attemptCount + 1
         onComplete(selectedAnswers, questions, nextAttemptNumber)
       } catch (error: any) {
@@ -425,7 +431,7 @@ export default function QuizComponent({
       logInfo("Retrying quiz", { attemptCount, courseId, lessonId })
       
       // Check if multiple attempts are allowed
-      if (!quiz.allowMultipleAttempts && attemptCount > 0) {
+      if (!submissionError && !quiz.allowMultipleAttempts && attemptCount > 0) {
         logWarning("Multiple attempts not allowed", {
           component: "QuizComponent",
           action: "handleRetryQuiz",
@@ -439,7 +445,7 @@ export default function QuizComponent({
       // Use database attempt number if available, otherwise use local state
       const currentAttemptCount = currentAttemptNumber > 0 ? currentAttemptNumber : (initialAttemptCount !== undefined ? initialAttemptCount : attemptCount)
       const maxAttempts = quiz.maxAttempts || 3
-      if (currentAttemptCount >= maxAttempts) {
+      if (!submissionError && currentAttemptCount >= maxAttempts) {
         logInfo(`Max attempts (${maxAttempts}) reached. Cannot retry.`, { currentAttemptCount, maxAttempts })
         toast.error(`You have reached the maximum number of attempts (${maxAttempts}) for this quiz.`)
         return // Don't allow retry if max attempts reached
@@ -487,8 +493,6 @@ export default function QuizComponent({
         courseId,
         lessonId,
         stack: error?.stack,
-        lessonId,
-        courseId,
       })
       const errorMessage = error?.message || error?.toString() || "Failed to retry quiz. Please refresh the page."
       setSubmissionError(errorMessage)
@@ -539,10 +543,10 @@ export default function QuizComponent({
     const percentage = showResultsOnly && initialScore !== undefined 
       ? initialScore 
       : totalPoints > 0 ? (pointsEarned / totalPoints) * 100 : 0
-    const passed = percentage >= minimumQuizScore
+    const passed = percentage >= passingScore
     const maxAttempts = quiz.maxAttempts || 3
     // Calculate minimum points needed - must be calculated before use in JSX
-    const minimumPointsNeeded = Math.ceil((minimumQuizScore / 100) * totalPoints)
+    const minimumPointsNeeded = Math.ceil((passingScore / 100) * totalPoints)
     // Use database attempt number if available, otherwise use initialAttemptCount or local attemptCount
     // Cap the attempt count at maxAttempts to prevent showing "4 of 3" etc.
     const rawAttemptCount = currentAttemptNumber > 0 
@@ -555,10 +559,10 @@ export default function QuizComponent({
     // - Current attempt count is 0 (no attempts made yet - shouldn't happen in results screen)
     // - Current attempt count is greater than or equal to max attempts (max reached)
     const hasReachedMaxAttempts = currentAttemptCount >= maxAttempts
-    const canRetry = !disabled && 
-                     (quiz.allowMultipleAttempts !== false) && 
-                     currentAttemptCount > 0 && 
-                     !hasReachedMaxAttempts
+    const canRetry = !disabled && (
+      !!submissionError ||
+      ((quiz.allowMultipleAttempts !== false) && currentAttemptCount > 0 && !hasReachedMaxAttempts)
+    )
 
     return (
       <div className="space-y-6 max-w-3xl mx-auto">
@@ -606,7 +610,7 @@ export default function QuizComponent({
                     textAnchor="middle"
                     alignmentBaseline="central"
                     className="fill-current text-foreground dark:text-foreground"
-                  >{`${percentage.toFixed(0)}%`}</text>
+                  >{`${Number(percentage.toFixed(2))}%`}</text>
                 </svg>
               </div>
               
@@ -625,7 +629,7 @@ export default function QuizComponent({
                 ) : (
                   <div className="space-y-2">
                     <p className="text-lg md:text-xl text-red-600 dark:text-red-400 font-semibold">
-                      You need {minimumQuizScore}% ({minimumPointsNeeded} points) to pass.
+                      You need {passingScore}% ({minimumPointsNeeded} points) to pass.
                     </p>
                     {canRetry && (
                       <p className="text-sm text-muted-foreground">You can retry the quiz to improve your score.</p>
@@ -822,7 +826,7 @@ export default function QuizComponent({
                   Retry Quiz
                 </Button>
               )}
-              {passed && onContinue && (
+              {passed && !submissionError && onContinue && (
                 <Button 
                   onClick={() => onContinue()} 
                   className="bg-primary hover:bg-primary/90 min-h-[44px]"
@@ -841,7 +845,7 @@ export default function QuizComponent({
 
   const question = questions[currentQuestion]
   const totalPoints = calculateTotalPoints()
-  const minimumPointsNeeded = Math.ceil((minimumQuizScore / 100) * totalPoints)
+  const minimumPointsNeeded = Math.ceil((passingScore / 100) * totalPoints)
 
   // Show quiz info card before starting (when quiz hasn't been started yet AND not showing results)
   // Don't show info card if:
@@ -874,7 +878,7 @@ export default function QuizComponent({
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Minimum Score to Pass:</span>
-                    <span className="font-medium text-foreground">{minimumQuizScore}%</span>
+                    <span className="font-medium text-foreground">{passingScore}%</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-2 mt-2">
                     <span>Points Needed to Pass:</span>

@@ -22,6 +22,7 @@ import { useQuizData } from "./hooks/useQuizData"
 import { useCourseProgress } from "./hooks/useCourseProgress"
 import { logError, logInfo, logWarning, formatErrorMessage, handleApiError } from "./utils/errorHandler"
 import ErrorState from "@/components/ErrorState"
+import { getPassingScore } from "@/lib/quiz/passing-score"
 
 interface Course {
   id: number
@@ -38,7 +39,6 @@ interface Course {
     html?: string
     text?: string
     estimatedDuration?: number
-    type?: string
   }>
 }
 
@@ -645,7 +645,7 @@ export default function CourseLearningPage() {
       }
       
       scorePercentage = totalPoints > 0 ? (pointsEarned / totalPoints) * 100 : 0
-      const minimumScore = course?.settings?.minimumQuizScore || 50
+      const minimumScore = getPassingScore(lesson.quiz?.passingScore, course?.settings?.minimumQuizScore)
       quizPassed = scorePercentage >= minimumScore
 
       logInfo("Quiz score calculated", {
@@ -1063,13 +1063,13 @@ export default function CourseLearningPage() {
                             allowMultipleAttempts: currentLesson.quiz?.enabled !== false && (currentLesson.quiz?.allowMultipleAttempts !== false),
                             showCorrectAnswers: currentLesson.quiz?.showCorrectAnswers || true,
                             maxAttempts: currentLesson.quiz?.maxAttempts || 3,
-                            // Mark quiz as disabled if it's disabled (prevents retake)
-                            disabled: currentLesson.quiz?.enabled === false,
+                            passingScore: currentLesson.quiz?.passingScore,
                       }}
+                      disabled={currentLesson.quiz?.enabled === false}
                       onComplete={handleQuizComplete}
                           onContinue={handleContinueFromQuiz}
                           onRetry={() => clearQuizData(currentLesson.id)}
-                      minimumQuizScore={course?.settings?.minimumQuizScore || course?.settings?.certificate?.minimumQuizScore || 50}
+                      minimumQuizScore={course?.settings?.minimumQuizScore ?? 50}
                       courseId={id}
                       lessonId={currentLesson.id}
                           showResultsOnly={completedQuizzes && currentLesson.id ? (completedQuizzes[currentLesson.id] || false) : false}
