@@ -1,9 +1,9 @@
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 
 export async function GET(request: Request) {
-  const supabase = await createClient() // For user authentication
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -13,10 +13,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const courseId = searchParams.get("courseId")
 
-  // Use service role client to bypass RLS policies for reading
-  const serviceSupabase = createServiceRoleClient()
-
-  let query = serviceSupabase
+  let query = supabase
     .from("progress")
     .select("*")
     .eq("user_id", user.id)
@@ -32,7 +29,7 @@ export async function GET(request: Request) {
       component: "progress/route",
       action: "GET",
       userId: user.id,
-      courseId,
+      courseId: courseId ?? undefined,
     })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -41,7 +38,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient() // For user authentication
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -52,11 +49,8 @@ export async function POST(request: Request) {
 
   logInfo("Progress API POST: Received data", { progressData, userId: user.id })
 
-  // Use service role client for upsert to bypass RLS policies
-  const serviceSupabase = createServiceRoleClient()
-
   // Check if progress record already exists
-  const { data: existingProgress } = await serviceSupabase
+  const { data: existingProgress } = await supabase
     .from("progress")
     .select("*")
     .eq("user_id", user.id)
@@ -67,7 +61,7 @@ export async function POST(request: Request) {
 
   if (existingProgress) {
     // Update existing record
-    const { data: updatedData, error: updateError } = await serviceSupabase
+    const { data: updatedData, error: updateError } = await supabase
       .from("progress")
       .update({
         ...progressData,
@@ -82,7 +76,7 @@ export async function POST(request: Request) {
     error = updateError
   } else {
     // Insert new record
-    const { data: insertedData, error: insertError } = await serviceSupabase
+    const { data: insertedData, error: insertError } = await supabase
       .from("progress")
       .insert({
         ...progressData,

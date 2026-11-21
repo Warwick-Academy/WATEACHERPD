@@ -12,6 +12,7 @@ import { createCourseSlug } from "@/lib/slug"
 import type { User } from "@/data/users"
 import { useEnrollments, useProgress, useCourses, useRealtimeEnrollments, useRealtimeProgress, useProfile } from "@/lib/react-query/hooks"
 import { usePageSkeleton } from "@/lib/react-query/hooks/useSkeleton"
+import ErrorState from "@/components/ErrorState"
 
 interface Course {
   id: number
@@ -27,11 +28,11 @@ export default function LearnerDashboard() {
   const { user, loading: authLoading } = useClientAuthState()
   
   // Use React Query hooks for base data fetching - use same cached data as courses page
-  const { data: coursesData } = useCourses() // Get all courses (cached, same as courses page)
-  const { data: enrollmentsData, isPending: enrollmentsPending } = useEnrollments()
-  const { data: progressData, isPending: progressPending } = useProgress(null) // Fetch all progress
-  const { data: recommendedData, isPending: recommendedPending } = useCourses({ recommended: true })
-  const { data: profileData } = useProfile() // Get cached profile data
+  const { data: coursesData, error: coursesError } = useCourses()
+  const { data: enrollmentsData, error: enrollmentsError } = useEnrollments()
+  const { data: progressData, error: progressError } = useProgress(null)
+  const { data: recommendedData, error: recommendedError } = useCourses({ recommended: true })
+  const { data: profileData, error: profileError } = useProfile()
   
   // Set up real-time subscriptions
   useRealtimeEnrollments(user?.id)
@@ -166,6 +167,24 @@ export default function LearnerDashboard() {
 
   // Only calculate firstName when user data is available to prevent flicker
   const firstName = dashboardUser?.name?.split(" ")[0] || dashboardUser?.name || "there"
+  const dashboardError =
+    (!dashboardUser && profileError) ||
+    (!coursesData && coursesError) ||
+    (!enrollmentsData && enrollmentsError) ||
+    (!progressData && progressError) ||
+    (!recommendedData && recommendedError)
+
+  if (dashboardError) {
+    return (
+      <div className="pt-4 md:pt-8 pb-[30px] md:pb-8 max-w-7xl mx-auto px-4 lg:px-6">
+        <ErrorState
+          title="Unable to load your dashboard"
+          message={dashboardError.message}
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="pt-4 md:pt-8 pb-[30px] md:pb-8 max-w-7xl mx-auto px-4 lg:px-6">
@@ -186,7 +205,7 @@ export default function LearnerDashboard() {
       <div className="flex justify-between items-center mb-4 md:mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-primary">
-            {dashboardUser?.name ? `Hi, ${firstName} 👋🏻` : <span className="h-8 w-48 bg-muted animate-pulse rounded inline-block" />}
+            {`Hi, ${firstName} 👋🏻`}
           </h1>
         </div>
       </div>

@@ -48,11 +48,11 @@ BEGIN
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'user_type', 'learner')
+    'user'
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- ============================================================================
 -- PROFILES TABLE
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
-  user_type TEXT NOT NULL DEFAULT 'learner' CHECK (user_type IN ('user', 'admin')),
+  user_type TEXT NOT NULL DEFAULT 'user' CHECK (user_type IN ('user', 'admin')),
   profile_image TEXT,
   currency TEXT NOT NULL DEFAULT 'USD',
   email_verified BOOLEAN DEFAULT FALSE,
@@ -500,22 +500,34 @@ ALTER TABLE course_prerequisites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
+CREATE OR REPLACE FUNCTION public.current_user_profile_type()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT user_type FROM public.profiles WHERE id = (SELECT auth.uid())
+$$;
+
+REVOKE ALL ON FUNCTION public.current_user_profile_type() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_user_profile_type() TO anon, authenticated;
+
 CREATE POLICY "Users can view their own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
 CREATE POLICY "Users can update their own profile"
   ON profiles FOR UPDATE
-  USING (auth.uid() = id);
+  USING (auth.uid() = id)
+  WITH CHECK (
+    auth.uid() = id
+    AND user_type IS NOT DISTINCT FROM (SELECT public.current_user_profile_type())
+  );
 
 CREATE POLICY "Admins can view all profiles"
   ON profiles FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = auth.uid() AND user_type = 'admin'
-    )
-  );
+  USING ((SELECT public.current_user_profile_type()) = 'admin');
 
 -- Courses policies
 CREATE POLICY "Anyone can view published courses"
