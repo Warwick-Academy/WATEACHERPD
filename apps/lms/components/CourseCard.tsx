@@ -105,7 +105,7 @@ export default function CourseCard({
       if (enrollmentMode === "free") {
         // Enroll directly for free courses using React Query mutation
         try {
-          await enrollCourseMutation.mutateAsync(course.id)
+          await enrollCourseMutation.mutateAsync({ courseId: course.id })
           // Invalidate enrollments cache to ensure fresh data
           queryClient.invalidateQueries({ queryKey: ["enrollments"] })
           // Dispatch event to notify parent components
