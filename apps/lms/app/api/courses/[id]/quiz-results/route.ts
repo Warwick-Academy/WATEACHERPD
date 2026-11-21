@@ -162,6 +162,11 @@ export async function POST(
     if (!lesson) {
       return NextResponse.json({ error: "Quiz lesson not found in this course" }, { status: 400 })
     }
+    if (answers.some((answer: unknown) =>
+      !answer || typeof answer !== "object" || !("questionId" in answer) || !("userAnswer" in answer)
+    )) {
+      return NextResponse.json({ error: "Each answer must include a question ID and answer" }, { status: 400 })
+    }
     const questionIds = new Set((dbQuestions || []).map((question) => String(question.id)))
     const answerIds = answers.map((answer: { questionId?: unknown }) => String(answer.questionId))
     if (
