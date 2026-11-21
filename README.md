@@ -206,6 +206,12 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - Go to Table Editor in Supabase
       - You should see all the tables created: `profiles`, `courses`, `lessons`, `enrollments`, `progress`, `payments`, `certificates`, `instructors`, `resources`, `quiz_questions`, `quiz_settings`, `quiz_attempts`, `quiz_results`, `course_instructors`, `course_prerequisites`, `lesson_resources`, and `platform_settings`
 
+   e. **Configure signup confirmation**
+      - In Supabase Authentication → URL Configuration, set the Site URL to the LMS origin (for example, `https://your-lms.example.com`, without a trailing slash).
+      - In Authentication → Email Templates → Confirm signup, use a confirmation link of `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}`. The template in `apps/lms/supabase/email-templates/confirm-email.html` shows how to use this link.
+      - Deploy the LMS before changing the template. The confirmation page requires a button click before consuming the single-use token, preventing email scanners from consuming it by simply opening the link.
+      - Existing confirmation links do not change; request a fresh email at `/auth/confirm` after updating the template. Confirm that the database setup and profile-creation trigger are installed before accepting signups.
+
 5. **Start the development server**
    ```bash
    npm run dev

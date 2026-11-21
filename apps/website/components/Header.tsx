@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import Logo from "@/components/Logo"
 
@@ -10,9 +9,7 @@ export default function Header() {
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/">
-          <Logo className="w-32 md:w-44" />
-        </Link>
+        <Logo className="w-32 md:w-44" />
         <div className="flex gap-2">
           <a href={`${APP_URL}/auth/learner/login`} target="_blank" rel="noopener noreferrer">
             <Button variant="ghost" size="sm">Login</Button>

@@ -92,6 +92,37 @@ export default function UserSignUpPage() {
     }
   }
 
+  if (emailSent) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-background px-4 sm:px-6 py-6 sm:py-8">
+        <div className="w-full max-w-md space-y-4 sm:space-y-6">
+          <div className="text-center">
+            <Logo className="mx-auto mb-4 sm:mb-8 w-full max-w-[100px] sm:max-w-[120px]" />
+          </div>
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Check your email</CardTitle>
+              <CardDescription>
+                If registration was successful, a confirmation email has been sent to {email}. Open it and follow the instructions to finish creating your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert role="status" className="border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100">
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>Check your inbox and spam folder for your confirmation email.</AlertDescription>
+              </Alert>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-3 text-sm">
+              <Link href="/auth/confirm" className="underline">Request a new confirmation email</Link>
+              <Link href="/auth/learner/login" className="underline">Back to login</Link>
+            </CardFooter>
+          </Card>
+          <Indicator />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex justify-center items-center min-h-screen bg-background px-4 sm:px-6 py-6 sm:py-8">
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
@@ -109,14 +140,6 @@ export default function UserSignUpPage() {
                 <Alert variant="destructive" className="text-sm">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
-                </Alert>
-              )}
-              {emailSent && (
-                <Alert className="text-sm">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertDescription className="text-xs sm:text-sm">
-                    Verification email sent! Please check your inbox to verify your email address.
-                  </AlertDescription>
                 </Alert>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -232,8 +255,8 @@ export default function UserSignUpPage() {
               </div>
             </CardContent>
             <CardFooter className="p-4 sm:p-6 pt-0 flex flex-col space-y-3 sm:space-y-4">
-              <Button type="submit" className="w-full min-h-[44px] text-sm sm:text-base" disabled={loading || emailSent}>
-                {loading ? "Creating account..." : emailSent ? "Check your email" : "Sign Up"}
+              <Button type="submit" className="w-full min-h-[44px] text-sm sm:text-base" disabled={loading}>
+                {loading ? "Creating account and sending email..." : "Sign Up"}
               </Button>
               <div className="text-center text-xs sm:text-sm">
                 Already have an account?{" "}

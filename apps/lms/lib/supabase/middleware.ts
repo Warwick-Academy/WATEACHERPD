@@ -122,6 +122,11 @@ export async function updateSession(request: NextRequest) {
       })
     }
 
+    // Confirmation links must remain usable even when another account is signed in.
+    if (request.nextUrl.pathname === '/auth/confirm') {
+      return supabaseResponse
+    }
+
     // If trying to access auth pages, redirect to appropriate dashboard
     if (request.nextUrl.pathname.startsWith('/auth')) {
       // Prevent admins from accessing learner auth pages

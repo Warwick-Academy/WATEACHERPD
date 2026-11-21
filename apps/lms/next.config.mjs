@@ -42,6 +42,15 @@ const nextConfig = {
         ],
       },
       {
+        source: '/auth/confirm',
+        headers: [
+          {
+            key: 'Referrer-Policy',
+            value: 'no-referrer',
+          },
+        ],
+      },
+      {
         // Block admin routes
         source: '/admin/:path*',
         headers: [
