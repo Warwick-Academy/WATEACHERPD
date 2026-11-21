@@ -1,26 +1,56 @@
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { logError, logWarning } from "@/lib/utils/errorHandler"
 
 export async function POST(request: Request) {
-  const { email, password, name, userType = "user" } = await request.json()
-
-  // Validate and sanitize userType to ensure it's either "user" or "admin"
-  let validatedUserType = "user"
-  if (typeof userType === "string") {
-    const trimmed = userType.trim().toLowerCase()
-    if (trimmed === "user" || trimmed === "admin") {
-      validatedUserType = trimmed
-    } else {
-      logWarning(`Invalid userType "${userType}" in signup, defaulting to "user"`, {
-        component: "auth/signup/route",
-        action: "POST",
-        providedUserType: userType,
-      })
-    }
+  let payload: unknown
+  try {
+    payload = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("email" in payload) ||
+    typeof payload.email !== "string" ||
+    !("password" in payload) ||
+    typeof payload.password !== "string" ||
+    !("name" in payload) ||
+    typeof payload.name !== "string"
+  ) {
+    return NextResponse.json(
+      { error: "Email, password, and name are required" },
+      { status: 400 }
+    )
+  }
+
+  const { email, password, name } = payload
+
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return NextResponse.json(
+      { error: "Sign up is temporarily unavailable. Please contact the site administrator." },
+      { status: 503 }
+    )
+  }
+
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  try {
+    supabase = await createClient()
+  } catch (error) {
+    logError("Failed to initialize Supabase for signup", error, {
+      component: "auth/signup/route",
+      action: "POST",
+    })
+    return NextResponse.json(
+      { error: "Sign up is temporarily unavailable. Please contact the site administrator." },
+      { status: 503 }
+    )
+  }
 
   // Sign up the user
   const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -29,7 +59,7 @@ export async function POST(request: Request) {
     options: {
       data: {
         name,
-        user_type: validatedUserType,
+        user_type: "user",
       },
     },
   })
@@ -40,51 +70,6 @@ export async function POST(request: Request) {
 
   if (!authData.user) {
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 })
-  }
-
-  // Create profile using service role client to bypass RLS
-  // IMPORTANT: Always use "user" for signup to avoid constraint violations
-  // Admin users should be created through the admin endpoint
-  const profileData = {
-    id: authData.user.id,
-    email,
-    name,
-    user_type: "user", // Always "user" for signup - hardcoded to avoid constraint issues
-    currency: "USD", // All users get USD as default currency
-    bio: "",
-  }
-
-  let serviceClient
-  try {
-    serviceClient = createServiceRoleClient()
-  } catch (serviceError: any) {
-    logWarning("Service role key not available for signup, using regular client", {
-      component: "auth/signup/route",
-      action: "POST",
-      error: serviceError.message,
-    })
-    serviceClient = null
-  }
-
-  const clientToUse = serviceClient || supabase
-
-  logInfo("Signup: Creating profile", { userType: profileData.user_type, email })
-
-  const { error: profileError } = await clientToUse.from("profiles").insert(profileData)
-
-  if (profileError) {
-    logError("Error creating profile", profileError, {
-      component: "auth/signup/route",
-      action: "POST",
-      userId: authData.user.id,
-      email,
-    })
-    // Note: We can't easily rollback the auth user without admin privileges
-    // The user will need to contact support if this happens
-    return NextResponse.json(
-      { error: "Failed to create user profile. Please contact support." },
-      { status: 500 }
-    )
   }
 
   // Send welcome email notification (non-blocking)
