@@ -80,6 +80,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    ""/((?!_next/static|_next/image|favicon.ico|brand/|courses/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mp4)$).*)",.*)",
   ],
 }
