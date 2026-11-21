@@ -75,11 +75,11 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths including API routes for CORS handling
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * Match all request paths except static files and public images/videos:
+     * - _next/static, _next/image, favicon.ico
+     * - /brand and /courses folders
+     * - any png, jpg, jpeg, gif, svg, webp, ico or mp4 file
      */
-    ""/((?!_next/static|_next/image|favicon.ico|brand/|courses/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mp4)$).*)",.*)",
+    "/((?!_next/static|_next/image|favicon.ico|brand/|courses/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mp4)$).*)",
   ],
 }
