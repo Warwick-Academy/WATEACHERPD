@@ -336,7 +336,7 @@ export default function CoursePage() {
       if (enrollmentMode === "free") {
         // Enroll directly for free courses using React Query mutation
         try {
-          await enrollCourseMutation.mutateAsync(Number.parseInt(id))
+          await enrollCourseMutation.mutateAsync({ courseId: Number.parseInt(id) })
           toast.success(`Successfully enrolled in ${course?.title || "course"}`)
           // Invalidate enrollments cache to ensure fresh data (non-blocking)
           queryClient.invalidateQueries({ queryKey: ["enrollments"] })
