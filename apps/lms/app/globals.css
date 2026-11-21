@@ -386,3 +386,12 @@ media-control-bar {
     max-height: 100vh !important;
   }
 }
+
+/* Responsive YouTube embeds (lesson editor and learner view) */
+div[data-youtube-video] iframe {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 0.5rem;
+}

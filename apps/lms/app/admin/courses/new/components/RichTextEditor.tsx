@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { createLowlight } from "lowlight"
+import Youtube from "@tiptap/extension-youtube"
 import { Button } from "@/components/ui/button"
 import {
   Bold,
@@ -14,6 +15,7 @@ import {
   Redo,
   List,
   ListOrdered,
+  Video,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 
@@ -64,6 +66,16 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
       }),
       CodeBlockLowlight.configure({
         lowlight: createLowlight(),
+      }),
+      Youtube.configure({
+        nocookie: true,
+        modestBranding: true,
+        rel: 0,
+        width: 640,
+        height: 360,
+        HTMLAttributes: {
+          class: "w-full aspect-video rounded-lg my-4",
+        },
       }),
     ],
     content,
@@ -260,6 +272,21 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
           className={editor.isActive("codeBlock") ? "bg-muted" : ""}
         >
           <Code className="w-4 h-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          title="Insert YouTube video"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            const url = window.prompt("Paste a YouTube video link")
+            if (url) {
+              editor.chain().focus().setYoutubeVideo({ src: url }).run()
+            }
+          }}
+        >
+          <Video className="w-4 h-4" />
         </Button>
         <div className="w-px h-6 bg-border mx-1" />
         <Button
