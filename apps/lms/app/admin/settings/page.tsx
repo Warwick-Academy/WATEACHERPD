@@ -17,11 +17,13 @@ import {
   Globe,
   DollarSign,
   Palette,
+  Award,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import TeamManagement from "./components/TeamManagement"
 import UserManagement from "./components/UserManagement"
 import BrandSettings from "./components/BrandSettings"
+import CertificateSettings from "./components/CertificateSettings"
 import { US } from "country-flag-icons/react/3x2"
 import AdminSettingsSkeleton from "@/components/AdminSettingsSkeleton"
 import { toast } from "sonner"
@@ -156,7 +158,7 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-primary mb-6">Settings</h1>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-muted p-1 rounded-lg w-full grid grid-cols-4 gap-2">
+          <TabsList className="bg-muted p-1 rounded-lg w-full grid grid-cols-5 gap-2">
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               <span>Platform</span>
@@ -164,6 +166,10 @@ export default function SettingsPage() {
             <TabsTrigger value="brand" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               <span>Brand</span>
+            </TabsTrigger>
+            <TabsTrigger value="certificates" className="flex items-center gap-2">
+              <Award className="h-4 w-4" />
+              <span>Certificates</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -308,6 +314,11 @@ export default function SettingsPage() {
           {/* Brand Tab - Always mounted, hidden when inactive */}
           <div className={activeTab !== "brand" ? "hidden" : ""}>
             <BrandSettings />
+          </div>
+
+          {/* Certificates Tab - Always mounted, hidden when inactive */}
+          <div className={activeTab !== "certificates" ? "hidden" : ""}>
+            <CertificateSettings />
           </div>
 
           {/* Users Tab - Always mounted, hidden when inactive */}

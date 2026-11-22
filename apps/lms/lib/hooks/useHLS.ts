@@ -95,55 +95,11 @@ export function useHLS({ videoRef, src, onError, videoReady = true, autoplay = f
     initializingRef.current = true
     currentSrcRef.current = src
     
-    // Check if URL is HLS (.m3u8)
+    // Check if URL is HLS (.m3u8). Non-HLS sources (plain MP4/WebM from
+    // Supabase Storage, /courses/... files or external hosts) play directly -
+    // no HLS probing or transcoded variants exist any more.
     const isHLSFile = src.includes('.m3u8')
-    
-    // For MP4 videos, try to use HLS if available
-    // Construct HLS URL from MP4 URL using the same logic as getHLSVideoUrl
-    let hlsUrl: string | null = null
-    if (!isHLSFile && (src.includes('.mp4') || src.includes('.webm') || src.includes('/video-') || src.includes('/preview-video-') || src.includes('/lessons/'))) {
-      // Check if we already tried HLS for this source and it failed
-      if (hlsFailedForSrcRef.current === src) {
-        console.log('HLS previously failed for this source, using MP4 directly:', src)
-        initializingRef.current = false
-        setIsHLS(false)
-        setEffectiveVideoSrc(src)
-        video.src = src
-        const showThumbnail = () => {
-          if (video.paused) video.currentTime = 0
-        }
-        video.addEventListener('loadeddata', showThumbnail, { once: true })
-        video.addEventListener('canplay', showThumbnail, { once: true })
-        return
-      }
-
-      // Extract S3 key from URL (handles both S3 URLs and CDN URLs)
-      try {
-        const url = new URL(src)
-        let s3Key: string | null = null
-        
-        // Extract S3 key from pathname (works for both S3 and Azure Front Door)
-        if (url.pathname) {
-          s3Key = url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname
-        }
-        
-        if (s3Key) {
-          // Use same logic as getHLSVideoUrl: path/hls/baseName/baseName.m3u8
-          // MediaConvert creates the master playlist using the folder name as filename
-          const lastSlashIndex = s3Key.lastIndexOf('/')
-          const path = lastSlashIndex >= 0 ? s3Key.substring(0, lastSlashIndex) : ''
-          const filename = lastSlashIndex >= 0 ? s3Key.substring(lastSlashIndex + 1) : s3Key
-          const baseName = filename.replace(/\.[^/.]+$/, '')
-          const hlsKey = path ? `${path}/hls/${baseName}/${baseName}.m3u8` : `hls/${baseName}/${baseName}.m3u8`
-          
-          // Construct full HLS URL using same origin
-          hlsUrl = `${url.origin}/${hlsKey}`
-        }
-      } catch (e) {
-        // Invalid URL, skip HLS
-        console.warn('Failed to construct HLS URL:', e)
-      }
-    }
+    const hlsUrl = null as string | null
 
     setIsHLS(isHLSFile || !!hlsUrl)
 

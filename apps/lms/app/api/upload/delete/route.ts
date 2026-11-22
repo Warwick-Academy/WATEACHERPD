@@ -1,8 +1,17 @@
-import { deleteFileFromS3, deleteVideoWithHLS, extractS3KeyFromUrl } from "@/lib/aws/s3"
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { logError } from "@/lib/utils/errorHandler"
+import { PUBLIC_MEDIA_BUCKET, extractStoragePathFromUrl } from "@/lib/storage/shared"
+import { deleteFile } from "@/lib/storage/server"
 
+/**
+ * Delete an uploaded file from Supabase Storage.
+ *
+ * URLs that are not in this project's public-media bucket (site-relative paths
+ * such as /brand/... and /courses/..., or external URLs) are never deleted.
+ * Admins can delete any public-media file; other users only files in their own
+ * profile folder (their profile picture).
+ */
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,94 +20,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { url, path } = await request.json()
+  const { url, path, bucket } = await request.json()
 
   if (!url && !path) {
     return NextResponse.json({ error: "URL or path is required" }, { status: 400 })
   }
 
   try {
-    // All files are stored in S3
-    let s3Key = path
-    
-    if (!s3Key && url) {
-      // Extract S3 key from URL
-      // Format: https://bucket.s3.region.amazonaws.com/key
-      // Format: https://cloudfront-domain.cloudfront.net/key
-      // Format: https://endpoint.azurefd.net/key (Azure Front Door)
-      try {
-        const urlObj = new URL(url)
-        
-        if (url.includes("s3.amazonaws.com")) {
-          const urlParts = url.split(".s3.")
-          if (urlParts.length > 1) {
-            s3Key = urlParts[1].split("/").slice(1).join("/").split("?")[0] // Remove query params
-          }
-        } else if (url.includes("cloudfront.net")) {
-          // CloudFront URL: extract everything after domain
-          s3Key = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname
-          s3Key = s3Key.split("?")[0] // Remove query params
-        } else if (url.includes("azurefd.net")) {
-          // Azure Front Door URL: pathname is the S3 key
-          s3Key = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname
-          s3Key = s3Key.split("?")[0] // Remove query params
-        } else if (url.includes("amazonaws.com")) {
-          // Try to extract from any AWS URL format
-          const match = url.match(/amazonaws\.com\/(.+)$/)
-          if (match) {
-            s3Key = match[1].split("?")[0] // Remove query params
-          }
-        } else {
-          // Fallback: try to extract from pathname for any URL
-          s3Key = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname
-          s3Key = s3Key.split("?")[0] // Remove query params
-        }
-      } catch (e) {
-        logError("Failed to parse URL", e as Error, { url })
-        // Try simple extraction as fallback
-        const match = url.match(/\/([^?]+)/)
-        if (match) {
-          s3Key = match[1]
-        }
+    // Resolve the storage location. Explicit paths are only accepted for the
+    // public-media bucket; otherwise the URL must map to our Supabase Storage.
+    let storagePath: string | null = null
+    if (path && (!bucket || bucket === PUBLIC_MEDIA_BUCKET)) {
+      storagePath = String(path)
+    } else if (url) {
+      const location = extractStoragePathFromUrl(url)
+      if (location && location.bucket === PUBLIC_MEDIA_BUCKET) {
+        storagePath = location.path
       }
     }
 
-    if (!s3Key) {
-      return NextResponse.json({ error: "Could not extract S3 key from URL" }, { status: 400 })
+    if (!storagePath) {
+      // Not one of our storage files (e.g. /brand/..., /courses/... or an
+      // external URL) - leave it alone and report success.
+      return NextResponse.json({ message: "File is not stored in Supabase Storage; nothing to delete" })
     }
 
-    try {
-      // Check if it's a video file - if so, delete video + HLS folder
-      const isVideoFile = s3Key.includes('/video-') || 
-                         s3Key.includes('/preview-video-') || 
-                         s3Key.includes('.mp4') || 
-                         s3Key.includes('.webm') ||
-                         s3Key.includes('.mov') ||
-                         s3Key.includes('.avi')
-
-      if (isVideoFile) {
-        // Delete video file and its HLS folder
-        const result = await deleteVideoWithHLS(s3Key)
-        if (result.errors.length > 0) {
-          logWarning("Some files failed to delete", { s3Key, errors: result.errors })
-        }
-        return NextResponse.json({ 
-          message: `Deleted video and ${result.deleted} file(s) (including HLS folder)`,
-          deleted: result.deleted,
-          errors: result.errors.length > 0 ? result.errors : undefined
+    // Authorisation: admins can delete any file; everyone else only their own
+    // profile folder.
+    const ownProfilePrefix = `profile/user-${user.id}/`
+    if (!storagePath.startsWith(ownProfilePrefix)) {
+      const serviceSupabase = createServiceRoleClient()
+      const { data: profile, error: profileError } = await serviceSupabase
+        .from("profiles")
+        .select("user_type")
+        .eq("id", user.id)
+        .single()
+      if (profileError) {
+        logError("Delete: failed to verify user role", profileError, {
+          component: "upload/delete/route",
+          action: "POST",
+          userId: user.id,
         })
-      } else {
-        // For non-video files, just delete the file
-        await deleteFileFromS3(s3Key)
-        return NextResponse.json({ message: "File deleted successfully from S3" })
+        return NextResponse.json({ error: "Failed to verify permissions" }, { status: 500 })
       }
-    } catch (s3Error: any) {
-      // If file doesn't exist, that's okay
-      if (s3Error.message?.includes("NoSuchKey") || s3Error.message?.includes("not found")) {
-        return NextResponse.json({ message: "File deleted or not found in S3" })
+      if (profile?.user_type !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
-      throw s3Error
     }
+
+    await deleteFile(storagePath)
+    return NextResponse.json({ message: "File deleted successfully" })
   } catch (error: any) {
     logError("Delete error", error, {
       component: "upload/delete/route",
@@ -111,4 +82,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

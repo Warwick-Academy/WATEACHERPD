@@ -77,7 +77,7 @@ function NewCourseContent() {
         price: undefined,
       },
       certificate: {
-        certificateEnabled: false,
+        certificateEnabled: true,
         certificateTemplate: "",
         certificateDescription: "",
         signatureImage: "",

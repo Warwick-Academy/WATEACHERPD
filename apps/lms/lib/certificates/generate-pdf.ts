@@ -20,6 +20,8 @@ interface CertificateData {
   signatureName?: string // Name of the signer (e.g., "John Doe")
   signatureTitle?: string // Title of the signer (e.g., "Director of Education")
   additionalText?: string // Additional text to display on certificate
+  grade?: string // Final score shown for the [Grade] placeholder (e.g., "92%")
+  pdHours?: string // Professional development hours for the [PD Hours] placeholder
 }
 
 // Helper function to get the font directory path
@@ -62,10 +64,21 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
     }
     return Buffer.from(base64Data, "base64")
   }
-  
-  // Handle regular URLs
-  console.log("[PDF Generation] Fetching image from URL:", url)
-  const response = await fetch(url)
+
+  // Resolve site-relative paths (e.g. /brand/signature.png) against the app URL
+  let resolvedUrl = url
+  if (url.startsWith("/")) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    if (!baseUrl) {
+      throw new Error(`Cannot resolve relative image URL ${url}: NEXT_PUBLIC_APP_URL is not set`)
+    }
+    resolvedUrl = new URL(url, baseUrl).toString()
+  }
+
+  // Handle regular URLs (works with Supabase public URLs and full addresses
+  // such as https://wateacherpd.netlify.app/brand/signature.png)
+  console.log("[PDF Generation] Fetching image from URL:", resolvedUrl)
+  const response = await fetch(resolvedUrl)
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`)
   }
@@ -258,9 +271,19 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
         day: "numeric",
       })
 
-      // Prepare description template
-      const descriptionTemplate = data.certificateDescription ||
+      // Prepare description template, substituting [Grade] and [PD Hours].
+      // [Student Name] and [Course Name] are substituted (and bolded) by the renderer.
+      const substitutePlaceholders = (text: string): string =>
+        text
+          .replace(/\[grade\]/gi, data.grade || "N/A")
+          .replace(/\[pd[\s_]*hours\]/gi, data.pdHours || "0")
+
+      const descriptionTemplate = substitutePlaceholders(
+        data.certificateDescription ||
         "This certifies that [Student Name] has successfully completed the [Course Name]."
+      )
+
+      const additionalText = data.additionalText ? substitutePlaceholders(data.additionalText) : undefined
 
       // Prepare renderer data
       const rendererData: RendererData = {
@@ -268,7 +291,7 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
         studentName: data.learnerName,
         courseName: data.courseTitle,
         descriptionTemplate: descriptionTemplate,
-        additionalText: data.additionalText,
+        additionalText,
         issuedOn: `Issued on ${issuedDate}`,
         signatureName: data.signatureName,
         signatureTitle: data.signatureTitle,

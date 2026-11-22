@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 import { extractIdFromSlug } from "@/lib/slug"
 import { shuffleQuiz, generateSeed } from "@/lib/quiz/shuffle"
-import { transformVideoUrls } from "@/lib/aws/s3"
+import { transformVideoUrls } from "@/lib/storage/shared"
 
 export async function GET(
   request: Request,
@@ -829,11 +829,11 @@ export async function DELETE(
 
     logInfo("Deleting course and all related data", { courseId: numericId })
 
-    // Cleanup S3 files before deleting database records
+    // Cleanup storage files before deleting database records
     try {
-      const { cleanupCourseFiles } = await import("@/lib/aws/s3-cleanup")
+      const { cleanupCourseFiles } = await import("@/lib/storage/cleanup")
       const cleanupResult = await cleanupCourseFiles(numericId)
-      logInfo(`S3 cleanup: ${cleanupResult.deleted} files deleted, ${cleanupResult.errors} errors`, { courseId: numericId })
+      logInfo(`Storage cleanup: ${cleanupResult.deleted} files deleted, ${cleanupResult.errors} errors`, { courseId: numericId })
     } catch (cleanupError: any) {
       logError("Error during S3 cleanup (continuing with deletion)", cleanupError, {
         component: "courses/[id]/route",

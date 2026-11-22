@@ -125,7 +125,7 @@ test("draft saves, publishes and reloads lesson levels; omitted legacy levels ar
     "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/supabase/server": { createClient: async () => db.client, createServiceRoleClient: () => db.client },
     "@/lib/utils/errorHandler": { logError() {}, logWarning() {}, logInfo() {}, createErrorResponse: (error) => ({ error: String(error) }) },
-    "@/lib/aws/s3": { transformVideoUrls: (value) => value },
+    "@/lib/storage/shared": { transformVideoUrls: (value) => value, extractStoragePathFromUrl: () => null },
     "@/lib/lesson-levels": levels,
   })
   const lesson = (id, selected) => ({ id, title: "Lesson", type: "text", content: {}, settings: {}, quiz: { enabled: false, questions: [] }, ...(selected === undefined ? {} : { levels: selected }) })
@@ -165,7 +165,7 @@ test("course list and detail expose lesson levels for learner badges", async () 
     "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/supabase/server": { createClient: async () => db.client, createServiceRoleClient: () => db.client },
     "@/lib/utils/errorHandler": { logError() {}, logWarning() {}, logInfo() {}, createErrorResponse: (error) => ({ error: String(error) }) },
-    "@/lib/aws/s3": { transformVideoUrls: (value) => value },
+    "@/lib/storage/shared": { transformVideoUrls: (value) => value, extractStoragePathFromUrl: () => null },
     "@/lib/slug": { extractIdFromSlug: (id) => id },
     "@/lib/quiz/shuffle": { shuffleQuiz: (questions) => questions, generateSeed: () => 1 },
   }
@@ -191,7 +191,7 @@ test("course preview hides lesson content from cancelled and anonymous viewers",
     "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/supabase/server": { createClient: async () => db.client, createServiceRoleClient: () => db.client },
     "@/lib/utils/errorHandler": { logError() {}, logWarning() {}, logInfo() {}, createErrorResponse: (error) => ({ error: String(error) }) },
-    "@/lib/aws/s3": { transformVideoUrls: (value) => value },
+    "@/lib/storage/shared": { transformVideoUrls: (value) => value, extractStoragePathFromUrl: () => null },
     "@/lib/slug": { extractIdFromSlug: (id) => id },
     "@/lib/quiz/shuffle": { shuffleQuiz: (questions) => questions, generateSeed: () => 1 },
   }

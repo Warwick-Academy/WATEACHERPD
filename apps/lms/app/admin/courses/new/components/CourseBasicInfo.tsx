@@ -201,7 +201,6 @@ export default function CourseBasicInfo({ data, onUpdate, courseId }: CourseBasi
           <FileUpload
             type="video"
             accept="video/mp4,video/webm,video/ogg"
-            maxSize={2 * 1024 * 1024 * 1024} // 2GB
             multiple={false}
             courseId={courseId}
             initialValue={data.previewVideo ? data.previewVideo : undefined}

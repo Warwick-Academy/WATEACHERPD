@@ -134,11 +134,8 @@ export default function ResourceCard({ resource, onUpdate, onDelete, lessonId, c
                     type="resource"
                     bucket="course-documents"
                     accept="application/pdf,.doc,.docx,.txt,.zip,image/*"
-                    maxSize={50 * 1024 * 1024}
                     multiple={false}
                     courseId={courseId}
-                    lessonId={lessonId}
-                    resourceId={resourceId}
                     lessonId={lessonId}
                     resourceId={resourceId}
                     initialValue={resource.url || undefined}

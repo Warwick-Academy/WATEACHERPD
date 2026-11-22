@@ -90,18 +90,7 @@ export default function ResourcesPanel({ resources }: ResourcesPanelProps) {
     // For documents, force download
     setDownloadingIndex(index)
     try {
-      // Check if URL is an S3 URL (needs to go through our API)
-      const isS3Url = resource.url.includes("s3.amazonaws.com") || 
-                     resource.url.includes("amazonaws.com") || 
-                     resource.url.includes("cloudfront.net")
-      
-      let downloadUrl = resource.url
-      if (isS3Url) {
-        // Use our download API endpoint for S3 files
-        downloadUrl = `/api/resources/download?url=${encodeURIComponent(resource.url)}`
-      }
-      
-      const response = await fetch(downloadUrl)
+      const response = await fetch(resource.url)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Failed to fetch file" }))
         throw new Error(errorData.error || "Failed to fetch file")

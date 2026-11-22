@@ -109,7 +109,7 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
 - **Components:** [Radix UI](https://www.radix-ui.com/) + [shadcn/ui](https://ui.shadcn.com/)
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL)
 - **Authentication:** Supabase Auth
-- **File Storage:** AWS S3 + CloudFront
+- **File Storage:** [Supabase Storage](https://supabase.com/docs/guides/storage)
 - **State Management:** [TanStack Query](https://tanstack.com/query)
 - **Forms:** [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
 - **Payments:** [Stripe](https://stripe.com/) & [Flutterwave](https://flutterwave.com/)
@@ -127,7 +127,6 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
 - Node.js 18.0 or higher
 - npm 10.0 or higher
 - A Supabase account (free tier works)
-- AWS account (for S3 storage, optional for development)
 - SendGrid account (for email notifications, optional)
 
 ### Installation
@@ -152,12 +151,12 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-   # AWS S3 (optional for development)
-   AWS_REGION=us-east-1
-   AWS_ACCESS_KEY_ID=your_aws_access_key
-   AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-   AWS_S3_BUCKET_NAME=your_bucket_name
-   AWS_CLOUDFRONT_DOMAIN=your_cloudfront_domain
+   # Supabase Storage (file uploads - defaults shown, optional)
+   NEXT_PUBLIC_SUPABASE_PUBLIC_MEDIA_BUCKET=public-media
+   NEXT_PUBLIC_SUPABASE_CERTIFICATES_BUCKET=certificates
+   NEXT_PUBLIC_MAX_IMAGE_SIZE_MB=5
+   NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB=25
+   NEXT_PUBLIC_MAX_VIDEO_SIZE_MB=50
 
    # Payment Gateways (optional)
    STRIPE_SECRET_KEY=your_stripe_secret_key
@@ -238,6 +237,12 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - Generated passwords are shown once or included in the downloadable import results. Transfer them securely and delete the results file when no longer needed. Assignments work without SendGrid; notifications require `SENDGRID_API_KEY`.
       - Cancelling retains lesson progress and prevents further access through the LMS. Content already downloaded, cached or available through a public external video URL cannot be recalled. Reassigning restores the existing enrolment and its progress.
 
+   i. **Set up Supabase Storage and certificate defaults**
+      - Apply `apps/lms/supabase/migrations/20261122020000_supabase_storage.sql` in the Supabase SQL Editor. It creates the `public-media` (public read) and `certificates` (private) buckets, locks writes to the server, adds platform-wide certificate defaults to `platform_settings`, and enables certificates by default on new courses.
+      - File uploads go straight from the browser to Supabase Storage using signed upload URLs issued by the server. Only admins can upload course content; any signed-in user can upload their own profile picture.
+      - Size limits default to 5 MB for images, 25 MB for documents and 50 MB for videos (the largest single file on the Supabase free plan). Larger videos should be uploaded to YouTube (unlisted) and embedded by link.
+      - Platform-wide certificate templates, descriptions, additional text and the default signature are edited under Settings → Certificates. Certificate descriptions support the placeholders `[Student Name]`, `[Course Name]`, `[Grade]` and `[PD Hours]`.
+
 5. **Start the development server**
    ```bash
    npm run dev
@@ -314,7 +319,7 @@ easelms/
 │   │   │   └── auth/     # Authentication pages
 │   │   ├── components/   # React components
 │   │   ├── lib/          # Utilities and helpers
-│   │   │   ├── aws/      # AWS S3 integration
+│   │   │   ├── storage/  # Supabase Storage integration
 │   │   │   ├── certificates/ # Certificate generation
 │   │   │   ├── payments/ # Payment processing
 │   │   │   └── supabase/ # Supabase utilities

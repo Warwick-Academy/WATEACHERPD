@@ -19,6 +19,19 @@ export interface PlatformSettings {
   seo_description?: string
   seo_keywords?: string
   seo_image?: string
+  // Platform-wide certificate defaults
+  certificate_template_completion?: string | null
+  certificate_template_participation?: string | null
+  certificate_template_achievement?: string | null
+  certificate_description_completion?: string | null
+  certificate_description_participation?: string | null
+  certificate_description_achievement?: string | null
+  certificate_additional_text_completion?: string | null
+  certificate_additional_text_participation?: string | null
+  certificate_additional_text_achievement?: string | null
+  certificate_signature_image?: string | null
+  certificate_signature_name?: string | null
+  certificate_signature_title?: string | null
 }
 
 interface SettingsResponse {

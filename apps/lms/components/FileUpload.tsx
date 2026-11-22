@@ -3,18 +3,26 @@
 import { useState, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { Upload, X, File, Image as ImageIcon, Video, FileText, CheckCircle2, Loader2 } from "lucide-react"
 import { useDropzone } from "react-dropzone"
+import {
+  extractStoragePathFromUrl,
+  getUploadRules,
+  getFileTooLargeMessage,
+  type StorageFileType,
+} from "@/lib/storage/shared"
 
 interface FileUploadProps {
   accept?: string
+  /** Deprecated: limits now come from the storage rules per file type */
   maxSize?: number
   multiple?: boolean
   onUploadComplete?: (files: File[], urls: string[]) => void
   onRemove?: () => void // Called when file is removed
-  type?: "image" | "video" | "document" | "all" | "thumbnail" | "avatar" | "certificate" | "quiz-image"
+  type?: "image" | "video" | "document" | "all" | "thumbnail" | "avatar" | "certificate" | "quiz-image" | "certificate-template" | "signature" | "lesson" | "quiz" | "resource"
   className?: string
-  bucket?: "course-thumbnails" | "course-documents" | "user-avatars" | "certificates"
+  bucket?: string
   additionalPath?: string
   courseId?: string | number // Course ID for proper folder structure
   lessonId?: string | number // Lesson ID for lesson-specific files
@@ -24,9 +32,69 @@ interface FileUploadProps {
   disabled?: boolean // Disable file upload
 }
 
+/** Map the component's type prop to a storage upload type */
+function toStorageFileType(type: FileUploadProps["type"], file?: File): StorageFileType {
+  switch (type) {
+    case "image":
+      return "thumbnail"
+    case "video":
+    case "thumbnail":
+    case "avatar":
+    case "certificate":
+    case "quiz-image":
+    case "certificate-template":
+    case "signature":
+    case "lesson":
+    case "quiz":
+    case "resource":
+    case "document":
+      return type
+    case "all":
+    default:
+      if (file?.type.startsWith("video/")) return "video"
+      return "document"
+  }
+}
+
+/** Upload a file directly to Supabase Storage via a signed URL, with progress */
+function uploadToSignedUrl(
+  signedUrl: string,
+  file: File,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("PUT", signedUrl)
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream")
+    xhr.setRequestHeader("x-upsert", "true")
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(event.loaded / event.total)
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        let message = `Upload failed with status ${xhr.status}`
+        try {
+          const body = JSON.parse(xhr.responseText)
+          if (body?.message || body?.error) message = body.message || body.error
+        } catch {
+          // Non-JSON error body - keep the status message
+        }
+        reject(new Error(message))
+      }
+    }
+    xhr.onerror = () => reject(new Error("Network error while uploading file"))
+    xhr.onabort = () => reject(new Error("Upload was cancelled"))
+    xhr.send(file)
+  })
+}
+
 export default function FileUpload({
   accept,
-  maxSize = 10 * 1024 * 1024, // 10MB default
+  maxSize,
   multiple = false,
   onUploadComplete,
   onRemove,
@@ -50,75 +118,26 @@ export default function FileUpload({
   const [error, setError] = useState<string | null>(null)
   const [removedInitialValue, setRemovedInitialValue] = useState(false)
 
+  // The display limit for the dropzone help text (based on the type prop)
+  const displayRules = getUploadRules(toStorageFileType(type))
+
   // Restore uploaded state from initialValue (only if not explicitly removed)
-  // This runs on mount and when initialValue changes
   useEffect(() => {
     if (initialValue && !removedInitialValue) {
       const urls = Array.isArray(initialValue) ? initialValue : [initialValue]
-      // Always restore if URLs don't match (handles remounts and prop changes)
       if (JSON.stringify(uploadedUrls) !== JSON.stringify(urls)) {
         setUploadedUrls(urls)
         setUploaded(true)
-        // Restore metadata for deletion if needed
         if (urls.length > 0) {
           const url = urls[0]
-          // Check if it's an S3 URL
-          const isS3Url = url.includes("s3.amazonaws.com") || url.includes("cloudfront.net") || url.includes("amazonaws.com")
-          
-          if (isS3Url) {
-            // Extract S3 key from URL
-            let s3Key = ""
-            try {
-              if (url.includes("s3.amazonaws.com")) {
-                const urlParts = url.split(".s3.")
-                if (urlParts.length > 1) {
-                  s3Key = urlParts[1].split("/").slice(1).join("/").split("?")[0] // Remove query params
-                }
-              } else if (url.includes("cloudfront.net")) {
-                const urlObj = new URL(url)
-                s3Key = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname
-              } else if (url.includes("amazonaws.com")) {
-                const match = url.match(/amazonaws\.com\/(.+)$/)
-                if (match) {
-                  s3Key = match[1].split("?")[0] // Remove query params
-                }
-              }
-            } catch {
-              // If extraction fails, that's okay - deletion API will try to extract it
-            }
-            setUploadMetadata([{ url, bucket: "s3", path: s3Key }])
-          } else if (bucket) {
-            // Supabase Storage URL
-            try {
-              const urlParts = url.split(`/${bucket}/`)
-              if (urlParts.length > 1) {
-                const path = urlParts[1]
-                setUploadMetadata([{ url, bucket, path }])
-              } else {
-                // Try alternative URL format
-                const match = url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/)
-                if (match) {
-                  setUploadMetadata([{ url, bucket, path: match[1] }])
-                } else {
-                  setUploadMetadata([{ url, bucket, path: "" }])
-                }
-              }
-            } catch {
-              // If we can't extract path, that's okay - deletion might still work with URL
-              setUploadMetadata([{ url, bucket, path: "" }])
-            }
-          } else {
-            // No bucket info, try to infer from URL
-            setUploadMetadata([{ url, bucket: bucket || "course-documents", path: "" }])
-          }
+          const location = extractStoragePathFromUrl(url)
+          setUploadMetadata([{ url, bucket: location?.bucket || "", path: location?.path || "" }])
         }
       }
     } else if (!initialValue) {
-      // If initialValue is cleared by parent, reset removed flag and clear state
       if (removedInitialValue) {
         setRemovedInitialValue(false)
       }
-      // Clear state if initialValue is removed and we have no files
       if (uploadedUrls.length > 0 && files.length === 0) {
         setUploadedUrls([])
         setUploadMetadata([])
@@ -133,6 +152,7 @@ export default function FileUpload({
       case "image":
         return { "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"] }
       case "video":
+      case "lesson":
         return { "video/*": [".mp4", ".webm", ".ogg"] }
       case "document":
         return { "application/*": [".pdf", ".doc", ".docx", ".txt"] }
@@ -143,241 +163,96 @@ export default function FileUpload({
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      const validFiles = acceptedFiles.filter((file) => file.size <= maxSize)
-      if (validFiles.length !== acceptedFiles.length) {
-        alert(`Some files exceed the maximum size of ${maxSize / 1024 / 1024}MB`)
-      }
-      setFiles((prev) => (multiple ? [...prev, ...validFiles] : validFiles))
-      setUploaded(false)
-      
-      // Auto-upload files immediately after selection
-      if (validFiles.length > 0) {
-        setUploading(true)
-        setProgress(0)
-        setError(null)
-        setUploadedUrls([])
+      setError(null)
 
-        try {
-          const urls: string[] = []
-          const metadata: Array<{ url: string; bucket: string; path: string }> = []
-          const totalFiles = validFiles.length
-          const currentBucket = bucket || (type === "thumbnail" ? "course-thumbnails" : type === "document" ? "course-documents" : "course-documents")
-
-          for (let i = 0; i < validFiles.length; i++) {
-            const file = validFiles[i]
-            
-            // Determine file type for bucket selection
-            let fileType = type
-            if (type === "all") {
-              if (file.type.startsWith("image/")) {
-                fileType = "document" // Default to document for general uploads
-              } else {
-                fileType = "document"
-              }
-            }
-
-            // Use presigned URL for video files or files larger than 4MB (to avoid Vercel body size limits)
-            const usePresignedUrl = fileType === "video" || file.size > 4 * 1024 * 1024
-
-            let data: { url: string; path: string; bucket?: string }
-            
-            if (usePresignedUrl) {
-              // Get presigned URL for direct S3 upload
-              const presignedResponse = await fetch("/api/upload/presigned-s3", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  filename: file.name,
-                  fileType,
-                  contentType: file.type,
-                  additionalPath,
-                  courseId,
-                  lessonId,
-                  resourceId,
-                  fileId,
-                }),
-              })
-
-              if (!presignedResponse.ok) {
-                let errorMessage = `Failed to get upload URL for ${file.name}`
-                try {
-                  const errorData = await presignedResponse.json()
-                  errorMessage = errorData.error || errorMessage
-                } catch {
-                  errorMessage = presignedResponse.statusText || errorMessage
-                }
-                throw new Error(errorMessage)
-              }
-
-              const presignedData = await presignedResponse.json()
-
-              // Upload directly to S3 using presigned URL
-              const uploadResponse = await fetch(presignedData.presignedUrl, {
-                method: "PUT",
-                body: file,
-                headers: {
-                  "Content-Type": file.type,
-                },
-              })
-
-              if (!uploadResponse.ok) {
-                throw new Error(`Failed to upload ${file.name} to S3: ${uploadResponse.statusText}`)
-              }
-
-              data = {
-                url: presignedData.url,
-                path: presignedData.key,
-                bucket: "s3",
-              }
-            } else {
-              // Use regular upload route for smaller files
-              const formData = new FormData()
-              formData.append("file", file)
-              formData.append("type", fileType)
-              if (bucket) {
-                formData.append("bucket", bucket)
-              }
-              if (additionalPath) {
-                formData.append("additionalPath", additionalPath)
-              }
-              if (courseId) {
-                formData.append("courseId", String(courseId))
-              }
-              if (lessonId) {
-                formData.append("lessonId", String(lessonId))
-              }
-              if (resourceId) {
-                formData.append("resourceId", String(resourceId))
-              }
-              if (fileId) {
-                formData.append("fileId", String(fileId))
-              }
-
-              const response = await fetch("/api/upload", {
-                method: "POST",
-                body: formData,
-              })
-
-              if (!response.ok) {
-                // Try to parse error response - check content type first to avoid consuming body twice
-                let errorMessage = `Failed to upload ${file.name}`
-                const contentType = response.headers.get("content-type")
-                
-                if (contentType && contentType.includes("application/json")) {
-                  try {
-                    const errorData = await response.json()
-                    errorMessage = errorData.error || errorMessage
-                  } catch {
-                    errorMessage = response.statusText || errorMessage
-                  }
-                } else {
-                  // For non-JSON responses (like plain text errors from Next.js), read as text
-                  try {
-                    const errorText = await response.text()
-                    errorMessage = errorText || errorMessage
-                  } catch {
-                    errorMessage = response.statusText || errorMessage
-                  }
-                }
-                throw new Error(errorMessage)
-              }
-
-              const responseData = await response.json()
-              data = {
-                url: responseData.url,
-                path: responseData.path,
-                bucket: responseData.bucket || "s3",
-              }
-            }
-
-            urls.push(data.url)
-            
-            // For S3 files, extract the key from the path
-            // The API returns path as the S3 key when bucket is "s3"
-            const isS3File = data.bucket === "s3"
-            metadata.push({
-              url: data.url,
-              bucket: isS3File ? "s3" : data.bucket || "s3",
-              path: data.path, // This is the S3 key for S3 files
-            })
-
-            // Update progress
-            setProgress(Math.round(((i + 1) / totalFiles) * 100))
-          }
-
-          setUploadedUrls(urls)
-          setUploadMetadata(metadata)
-          setUploading(false)
-          setUploaded(true)
-          
-          // Trigger HLS transcoding for all videos (for better performance)
-          if (type === "video" || type === "lesson") {
-            for (let i = 0; i < validFiles.length; i++) {
-              const file = validFiles[i]
-              const fileMetadata = metadata[i]
-              
-          // Transcode all videos for HLS adaptive streaming (better performance)
-          if (fileMetadata.path) {
-            console.log('Triggering HLS transcoding for video:', fileMetadata.path)
-            // Trigger transcoding asynchronously (don't block upload completion)
-            fetch("/api/videos/transcode", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                videoKey: fileMetadata.path,
-              }),
-            })
-            .then(async (response) => {
-              if (response.ok) {
-                const data = await response.json().catch(() => ({}))
-                console.log('✅ HLS transcoding job created:', data.jobId || 'success')
-              } else {
-                const errorData = await response.json().catch(() => ({}))
-                if (response.status === 503) {
-                  if (errorData.requiresIAM) {
-                    console.warn('⚠️ MediaConvert IAM role not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_MEDIACONVERT_ROLE_ARN environment variable. See AWS_MEDIACONVERT_SETUP.md'
-                    })
-                  } else if (errorData.requiresAWS) {
-                    console.warn('⚠️ AWS credentials not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables'
-                    })
-                  } else if (errorData.requiresS3) {
-                    console.warn('⚠️ S3 bucket not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_S3_BUCKET_NAME environment variable'
-                    })
-                  } else {
-                    console.warn('⚠️ HLS transcoding not available. Video will play as MP4.', errorData)
-                  }
-                } else {
-                  console.error('❌ Failed to trigger transcoding:', response.status, response.statusText, errorData)
-                }
-              }
-            })
-            .catch((error) => {
-              console.warn("⚠️ Failed to trigger video transcoding (non-critical):", error.message)
-              // Don't show error to user - transcoding is optional, video will play as MP4
-            })
-          }
-            }
-          }
-          
-          onUploadComplete?.(validFiles, urls)
-        } catch (err: any) {
-          setError(err.message || "Upload failed")
-          setUploading(false)
-          setUploaded(false)
+      // Validate type and size up front so the user gets a clear message
+      for (const file of acceptedFiles) {
+        const fileType = toStorageFileType(type, file)
+        const rules = getUploadRules(fileType)
+        if (!rules.isValid(file)) {
+          setError(rules.invalidMessage)
+          return
+        }
+        if (file.size > rules.maxSize) {
+          setError(getFileTooLargeMessage(fileType, rules.maxSize))
+          return
         }
       }
+
+      if (acceptedFiles.length === 0) return
+      setFiles((prev) => (multiple ? [...prev, ...acceptedFiles] : acceptedFiles))
+      setUploaded(false)
+      setUploading(true)
+      setProgress(0)
+      setUploadedUrls([])
+
+      try {
+        const urls: string[] = []
+        const metadata: Array<{ url: string; bucket: string; path: string }> = []
+        const totalFiles = acceptedFiles.length
+
+        for (let i = 0; i < totalFiles; i++) {
+          const file = acceptedFiles[i]
+          const fileType = toStorageFileType(type, file)
+
+          // 1. Ask the server for permission and a signed upload URL
+          const signedResponse = await fetch("/api/upload/signed-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              fileType,
+              contentType: file.type || "application/octet-stream",
+              fileSize: file.size,
+              additionalPath,
+              courseId,
+              lessonId,
+              resourceId,
+              fileId,
+            }),
+          })
+
+          if (!signedResponse.ok) {
+            let errorMessage = `Failed to get upload URL for ${file.name}`
+            try {
+              const errorData = await signedResponse.json()
+              errorMessage = errorData.error || errorMessage
+            } catch {
+              errorMessage = signedResponse.statusText || errorMessage
+            }
+            throw new Error(errorMessage)
+          }
+
+          const signedData = await signedResponse.json()
+
+          // 2. Upload the file straight to Supabase Storage (not through our API)
+          await uploadToSignedUrl(signedData.signedUrl, file, (fraction) => {
+            setProgress(Math.round(((i + fraction) / totalFiles) * 100))
+          })
+
+          urls.push(signedData.url)
+          metadata.push({
+            url: signedData.url,
+            bucket: signedData.bucket,
+            path: signedData.path,
+          })
+          setProgress(Math.round(((i + 1) / totalFiles) * 100))
+        }
+
+        setUploadedUrls(urls)
+        setUploadMetadata(metadata)
+        setUploading(false)
+        setUploaded(true)
+
+        // 3. Hand the final public URL(s) back to the form
+        onUploadComplete?.(acceptedFiles, urls)
+      } catch (err: any) {
+        setError(err.message || "Upload failed")
+        setUploading(false)
+        setUploaded(false)
+      }
     },
-    [maxSize, multiple, type, bucket, additionalPath, onUploadComplete]
+    [multiple, type, additionalPath, courseId, lessonId, resourceId, fileId, onUploadComplete]
   )
 
   const acceptTypes = getAcceptTypes()
@@ -385,222 +260,11 @@ export default function FileUpload({
     onDrop,
     accept: accept ? { [accept]: [] } : acceptTypes,
     multiple,
-    maxSize,
     disabled: disabled || uploading || uploaded,
   })
 
-  const handleUpload = async () => {
-    if (files.length === 0) return
-
-    setUploading(true)
-    setProgress(0)
-    setError(null)
-    setUploadedUrls([])
-
-    try {
-      const urls: string[] = []
-      const metadata: Array<{ url: string; bucket: string; path: string }> = []
-      const totalFiles = files.length
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        
-        // Determine file type for bucket selection
-        let fileType = type
-        if (type === "all") {
-          if (file.type.startsWith("image/")) {
-            fileType = "document" // Default to document for general uploads
-          } else {
-            fileType = "document"
-          }
-        }
-
-        // Use presigned URL for video files or files larger than 4MB (to avoid Vercel body size limits)
-        const usePresignedUrl = fileType === "video" || file.size > 4 * 1024 * 1024
-
-        let data: { url: string; path: string; bucket?: string }
-        
-        if (usePresignedUrl) {
-          // Get presigned URL for direct S3 upload
-          const presignedResponse = await fetch("/api/upload/presigned-s3", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              fileType,
-              contentType: file.type,
-              additionalPath,
-            }),
-          })
-
-          if (!presignedResponse.ok) {
-            let errorMessage = `Failed to get upload URL for ${file.name}`
-            try {
-              const errorData = await presignedResponse.json()
-              errorMessage = errorData.error || errorMessage
-            } catch {
-              errorMessage = presignedResponse.statusText || errorMessage
-            }
-            throw new Error(errorMessage)
-          }
-
-          const presignedData = await presignedResponse.json()
-
-          // Upload directly to S3 using presigned URL
-          const uploadResponse = await fetch(presignedData.presignedUrl, {
-            method: "PUT",
-            body: file,
-            headers: {
-              "Content-Type": file.type,
-            },
-          })
-
-          if (!uploadResponse.ok) {
-            throw new Error(`Failed to upload ${file.name} to S3: ${uploadResponse.statusText}`)
-          }
-
-          data = {
-            url: presignedData.url,
-            path: presignedData.key,
-            bucket: "s3",
-          }
-        } else {
-          // Use regular upload route for smaller files
-          const formData = new FormData()
-          formData.append("file", file)
-          formData.append("type", fileType)
-          if (bucket) {
-            formData.append("bucket", bucket)
-          }
-          if (additionalPath) {
-            formData.append("additionalPath", additionalPath)
-          }
-
-          const response = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          })
-
-          if (!response.ok) {
-            // Try to parse error response - check content type first to avoid consuming body twice
-            let errorMessage = `Failed to upload ${file.name}`
-            const contentType = response.headers.get("content-type")
-            
-            if (contentType && contentType.includes("application/json")) {
-              try {
-                const errorData = await response.json()
-                errorMessage = errorData.error || errorMessage
-              } catch {
-                errorMessage = response.statusText || errorMessage
-              }
-            } else {
-              // For non-JSON responses (like plain text errors from Next.js), read as text
-              try {
-                const errorText = await response.text()
-                errorMessage = errorText || errorMessage
-              } catch {
-                errorMessage = response.statusText || errorMessage
-              }
-            }
-            throw new Error(errorMessage)
-          }
-
-          const responseData = await response.json()
-          data = {
-            url: responseData.url,
-            path: responseData.path,
-            bucket: responseData.bucket || "s3",
-          }
-        }
-        urls.push(data.url)
-        
-        // For S3 files, extract the key from the path
-        // The API returns path as the S3 key when bucket is "s3"
-        const isS3File = data.bucket === "s3"
-        metadata.push({
-          url: data.url,
-          bucket: isS3File ? "s3" : data.bucket || "s3",
-          path: data.path, // This is the S3 key for S3 files
-        })
-
-        // Update progress
-        setProgress(Math.round(((i + 1) / totalFiles) * 100))
-      }
-
-      setUploadedUrls(urls)
-      setUploadMetadata(metadata)
-      setUploading(false)
-      setUploaded(true)
-      
-      // Trigger HLS transcoding for all videos (for better performance)
-      if (type === "video" || type === "lesson") {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i]
-          const fileMetadata = metadata[i]
-          
-          // Transcode all videos for HLS adaptive streaming (better performance)
-          if (fileMetadata.path) {
-            console.log('Triggering HLS transcoding for video:', fileMetadata.path)
-            // Trigger transcoding asynchronously (don't block upload completion)
-            fetch("/api/videos/transcode", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                videoKey: fileMetadata.path,
-              }),
-            })
-            .then(async (response) => {
-              if (response.ok) {
-                const data = await response.json().catch(() => ({}))
-                console.log('✅ HLS transcoding job created:', data.jobId || 'success')
-              } else {
-                const errorData = await response.json().catch(() => ({}))
-                if (response.status === 503) {
-                  if (errorData.requiresIAM) {
-                    console.warn('⚠️ MediaConvert IAM role not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_MEDIACONVERT_ROLE_ARN environment variable. See AWS_MEDIACONVERT_SETUP.md'
-                    })
-                  } else if (errorData.requiresAWS) {
-                    console.warn('⚠️ AWS credentials not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables'
-                    })
-                  } else if (errorData.requiresS3) {
-                    console.warn('⚠️ S3 bucket not configured. Video will play as MP4.', {
-                      error: errorData.error,
-                      hint: 'Set AWS_S3_BUCKET_NAME environment variable'
-                    })
-                  } else {
-                    console.warn('⚠️ HLS transcoding not available. Video will play as MP4.', errorData)
-                  }
-                } else {
-                  console.error('❌ Failed to trigger transcoding:', response.status, response.statusText, errorData)
-                }
-              }
-            })
-            .catch((error) => {
-              console.warn("⚠️ Failed to trigger video transcoding (non-critical):", error.message)
-              // Don't show error to user - transcoding is optional, video will play as MP4
-            })
-          }
-        }
-      }
-      
-      onUploadComplete?.(files, urls)
-    } catch (err: any) {
-      setError(err.message || "Upload failed")
-      setUploading(false)
-      setUploaded(false)
-    }
-  }
-
   const removeFile = async (index?: number) => {
-    // Delete file from S3 or Supabase Storage if it was uploaded
+    // Delete file from Supabase Storage if it was uploaded
     if (index !== undefined && uploadMetadata[index]) {
       const meta = uploadMetadata[index]
       try {
@@ -609,8 +273,8 @@ export default function FileUpload({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             url: meta.url,
-            bucket: meta.bucket,
-            path: meta.path,
+            bucket: meta.bucket || undefined,
+            path: meta.path || undefined,
           }),
         })
         if (!response.ok) {
@@ -626,60 +290,32 @@ export default function FileUpload({
       setUploadMetadata((prev) => prev.filter((_, i) => i !== index))
     } else if (index === undefined) {
       // Remove all files (including initialValue)
-      // Delete all uploaded files from S3 or Supabase
-      if (uploadMetadata.length > 0) {
-        await Promise.all(
-          uploadMetadata.map((meta) =>
-            fetch("/api/upload/delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                url: meta.url,
-                bucket: meta.bucket,
-                path: meta.path,
-              }),
-            })
-              .then((response) => {
-                if (!response.ok) {
-                  return response.json().then((errorData) => {
-                    console.error("Failed to delete file from storage:", errorData.error || "Unknown error")
-                  })
-                }
-              })
-              .catch((err) => {
-                console.error("Failed to delete file from storage:", err)
-              })
-          )
-        )
-      }
-      // Also try to delete initialValue if it exists
-      if (uploadedUrls.length > 0 && files.length === 0) {
-        // This is an initialValue file
-        const url = uploadedUrls[0]
-        // Check if it's an S3 URL
-        const isS3Url = url.includes("s3.amazonaws.com") || url.includes("cloudfront.net") || url.includes("amazonaws.com")
-        
-        // Try to get metadata for this URL
-        const existingMeta = uploadMetadata.find((m) => m.url === url)
-        
-        try {
-          const response = await fetch("/api/upload/delete", {
+      const toDelete = uploadMetadata.length > 0
+        ? uploadMetadata
+        : uploadedUrls.map((url) => ({ url, bucket: "", path: "" }))
+      await Promise.all(
+        toDelete.map((meta) =>
+          fetch("/api/upload/delete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              url,
-              bucket: existingMeta?.bucket || (isS3Url ? "s3" : (bucket || (type === "thumbnail" ? "course-thumbnails" : "course-documents"))),
-              path: existingMeta?.path,
+              url: meta.url,
+              bucket: meta.bucket || undefined,
+              path: meta.path || undefined,
             }),
           })
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            console.error("Failed to delete initialValue file from storage:", errorData.error || "Unknown error")
-          }
-        } catch (err) {
-          console.error("Failed to delete initialValue file from storage:", err)
-        }
-      }
+            .then((response) => {
+              if (!response.ok) {
+                return response.json().catch(() => ({})).then((errorData: any) => {
+                  console.error("Failed to delete file from storage:", errorData.error || "Unknown error")
+                })
+              }
+            })
+            .catch((err) => {
+              console.error("Failed to delete file from storage:", err)
+            })
+        )
+      )
       setFiles([])
       setRemovedInitialValue(true)
       setUploadedUrls([])
@@ -745,11 +381,16 @@ export default function FileUpload({
               </p>
               <p className="text-xs text-muted-foreground">
                 {type === "image" && "Images only"}
-                {type === "video" && "Videos only"}
+                {(type === "video" || type === "lesson") && "Videos only"}
                 {type === "document" && "Documents only"}
                 {type === "all" && "All file types"}
-                {` • Max size: ${maxSize / 1024 / 1024}MB`}
+                {` • Max size: ${Math.round(displayRules.maxSize / 1024 / 1024)}MB`}
               </p>
+              {(type === "video" || type === "lesson") && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  For larger videos, upload to YouTube (unlisted) and paste the link instead.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -792,6 +433,12 @@ export default function FileUpload({
                     )}
                   </div>
                 </div>
+                {uploading && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Progress value={progress} className="h-1.5 flex-1" />
+                    <span className="text-xs text-muted-foreground w-9 text-right">{progress}%</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -839,7 +486,13 @@ export default function FileUpload({
           )}
         </div>
       )}
+
+      {/* Show validation errors even before a file card exists */}
+      {!hasFiles && error && (
+        <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
     </div>
   )
 }
-

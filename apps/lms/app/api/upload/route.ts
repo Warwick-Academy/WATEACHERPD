@@ -1,8 +1,28 @@
-import { createClient } from "@/lib/supabase/server"
-import { uploadFileToS3, getS3StoragePath, getPublicUrl, isValidVideoFile, isValidImageFile, isValidDocumentFile, getMaxVideoSize, getMaxImageSize, getMaxDocumentSize } from "@/lib/aws/s3"
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { logError } from "@/lib/utils/errorHandler"
+import {
+  PUBLIC_MEDIA_BUCKET,
+  getStoragePath,
+  getUploadRules,
+  getFileTooLargeMessage,
+  type StorageFileType,
+} from "@/lib/storage/shared"
+import { uploadFile } from "@/lib/storage/server"
 
+const VALID_TYPES: StorageFileType[] = [
+  "video", "document", "thumbnail", "avatar", "certificate",
+  "quiz-image", "certificate-template", "signature", "lesson", "quiz", "resource",
+]
+
+/**
+ * Server-side upload to Supabase Storage for small files (e.g. profile pictures).
+ * Large files must use /api/upload/signed-url and upload directly from the browser,
+ * because Netlify limits request bodies to about 6 MB.
+ *
+ * Only admins can upload course content, templates and signatures.
+ * Any logged-in user can upload their own profile picture, but nothing else.
+ */
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,7 +33,7 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const file = formData.get("file") as File
-  const fileType = (formData.get("type") as string) || "document" // video, thumbnail, document, avatar, certificate, quiz-image, certificate-template, signature, lesson, quiz, resource
+  const requestedType = (formData.get("type") as string) || "document"
   const additionalPath = (formData.get("additionalPath") as string) || undefined
   const courseId = (formData.get("courseId") as string) || undefined
   const lessonId = (formData.get("lessonId") as string) || undefined
@@ -25,160 +45,79 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Determine file type and validate
-    let s3Type: "video" | "thumbnail" | "document" | "avatar" | "certificate" | "quiz-image" | "certificate-template" | "signature" | "lesson" | "quiz" | "resource"
-    let maxSize: number
-    let isValid: boolean
-
-    // Handle new specific types first
-    if (fileType === "certificate-template") {
-      s3Type = "certificate-template"
-      maxSize = getMaxDocumentSize()
-      isValid = isValidDocumentFile(file) || isValidImageFile(file) // Templates can be PDF or image
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid certificate template file type. Supported formats: PDF, PNG, JPG, JPEG, SVG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "signature") {
-      s3Type = "signature"
-      maxSize = getMaxImageSize()
-      isValid = isValidImageFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid signature file type. Supported formats: JPG, PNG, GIF, WebP, SVG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "lesson") {
-      s3Type = "lesson"
-      maxSize = getMaxVideoSize()
-      isValid = isValidVideoFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid lesson video file type. Supported formats: MP4, WebM, OGG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "quiz") {
-      s3Type = "quiz"
-      maxSize = getMaxImageSize()
-      isValid = isValidImageFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid quiz image file type. Supported formats: JPG, PNG, GIF, WebP, SVG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "resource") {
-      s3Type = "resource"
-      maxSize = getMaxDocumentSize()
-      isValid = isValidDocumentFile(file) || isValidImageFile(file) || isValidVideoFile(file) // Resources can be various types
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid resource file type. Supported formats: PDF, DOC, DOCX, TXT, ZIP, JPG, PNG, SVG, MP4, WebM" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "video" || file.type.startsWith("video/")) {
-      s3Type = "video"
-      maxSize = getMaxVideoSize()
-      isValid = isValidVideoFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid video file type. Supported formats: MP4, WebM, OGG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "quiz-image") {
-      // Legacy support
-      s3Type = "quiz-image"
-      maxSize = getMaxImageSize()
-      isValid = isValidImageFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid quiz image file type. Supported formats: JPG, PNG, GIF, WebP, SVG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "thumbnail" || fileType === "avatar" || file.type.startsWith("image/")) {
-      s3Type = fileType === "avatar" ? "avatar" : "thumbnail"
-      maxSize = getMaxImageSize()
-      isValid = isValidImageFile(file)
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid image file type. Supported formats: JPG, PNG, GIF, WebP, SVG" },
-          { status: 400 }
-        )
-      }
-    } else if (fileType === "certificate") {
-      // Legacy support
-      s3Type = "certificate"
-      maxSize = getMaxDocumentSize()
-      isValid = isValidDocumentFile(file) || isValidImageFile(file) // Certificates can be PDF or image
-      if (!isValid) {
-        return NextResponse.json(
-          { error: "Invalid certificate file type. Supported formats: PDF, PNG, JPG, JPEG, SVG" },
-          { status: 400 }
-        )
-      }
+    let fileType: StorageFileType
+    if (VALID_TYPES.includes(requestedType as StorageFileType)) {
+      fileType = requestedType as StorageFileType
+    } else if (file.type.startsWith("video/")) {
+      fileType = "video"
+    } else if (file.type.startsWith("image/")) {
+      fileType = "thumbnail"
     } else {
-      // Default to document (legacy) or resource
-      s3Type = fileType === "document" ? "document" : "resource"
-      maxSize = getMaxDocumentSize()
-      isValid = isValidDocumentFile(file) || isValidImageFile(file) || isValidVideoFile(file)
-      if (!isValid) {
+      fileType = "resource"
+    }
+
+    // Authorisation: avatars may be uploaded by any logged-in user (always into
+    // their own profile folder); everything else requires an admin.
+    if (fileType !== "avatar") {
+      const serviceSupabase = createServiceRoleClient()
+      const { data: profile, error: profileError } = await serviceSupabase
+        .from("profiles")
+        .select("user_type")
+        .eq("id", user.id)
+        .single()
+      if (profileError) {
+        logError("Upload: failed to verify user role", profileError, {
+          component: "upload/route",
+          action: "POST",
+          userId: user.id,
+        })
+        return NextResponse.json({ error: "Failed to verify permissions" }, { status: 500 })
+      }
+      if (profile?.user_type !== "admin") {
         return NextResponse.json(
-          { error: "Invalid file type. Supported formats: PDF, DOC, DOCX, TXT, ZIP, JPG, PNG, SVG, MP4, WebM" },
-          { status: 400 }
+          { error: "Forbidden: only admins can upload course content" },
+          { status: 403 }
         )
       }
     }
 
-    // Validate file size
-    if (file.size > maxSize) {
-      const maxSizeMB = maxSize / 1024 / 1024
-      const maxSizeGB = maxSize / 1024 / 1024 / 1024
-      const sizeLabel = maxSizeGB >= 1 ? `${maxSizeGB}GB` : `${maxSizeMB}MB`
+    const rules = getUploadRules(fileType)
+    if (!rules.isValid(file)) {
+      return NextResponse.json({ error: rules.invalidMessage }, { status: 400 })
+    }
+    if (file.size > rules.maxSize) {
       return NextResponse.json(
-        { error: `File size exceeds maximum allowed size of ${sizeLabel}` },
+        { error: getFileTooLargeMessage(fileType, rules.maxSize) },
         { status: 400 }
       )
     }
 
-    // Generate S3 storage path with proper folder structure
-    const s3Path = getS3StoragePath(
-      s3Type,
+    const path = getStoragePath(
+      fileType,
       user.id,
       file.name,
       additionalPath,
-      undefined, // fileHash - will be calculated if needed
+      undefined,
       courseId,
       lessonId,
       resourceId,
       fileId
     )
 
-    // Upload to S3
     const fileBuffer = Buffer.from(await file.arrayBuffer())
-    const { key, url: s3Url } = await uploadFileToS3(fileBuffer, s3Path, file.type)
-
-    // Transform to CDN URL if enabled (for videos)
-    const isVideo = s3Type === "video" || s3Type === "lesson"
-    const finalUrl = isVideo ? getPublicUrl(key, true) : s3Url
+    const { url } = await uploadFile(fileBuffer, path, file.type)
 
     return NextResponse.json({
-      url: finalUrl,
-      path: key,
-      bucket: "s3",
+      url,
+      path,
+      bucket: PUBLIC_MEDIA_BUCKET,
     })
   } catch (error: any) {
     logError("Upload error", error, {
       component: "upload/route",
       action: "POST",
       userId: user.id,
-      fileType,
+      fileType: requestedType,
     })
     return NextResponse.json(
       { error: error.message || "Failed to upload file" },
@@ -186,4 +125,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

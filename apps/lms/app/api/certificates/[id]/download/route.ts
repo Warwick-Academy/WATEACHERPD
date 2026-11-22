@@ -1,7 +1,9 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { generateCertificatePDF } from "@/lib/certificates/generate-pdf"
-import { uploadFileToS3, getS3StoragePath, getPublicUrl } from "@/lib/aws/s3"
+import { getCourseGradeAndHours } from "@/lib/certificates/course-grade"
+import { CERTIFICATES_BUCKET, getStoragePath } from "@/lib/storage/shared"
+import { uploadFile, downloadFile } from "@/lib/storage/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 import { getBrandSettings } from "@/lib/supabase/brand-settings"
 
@@ -119,36 +121,27 @@ export async function GET(
     }
   }
 
-    // Check if PDF URL already exists (from previous generation)
+    // Check if a PDF was already generated and stored in the private
+    // certificates bucket (certificate_url holds the storage path).
     let pdfBuffer: Buffer
-    let pdfUrl: string | null = certificate.certificate_url || null
+    const storedPath: string | null = certificate.certificate_url || null
 
-    // If PDF URL exists and is an S3 URL, try to fetch it
-    // Otherwise, regenerate (since we're migrating from Supabase Storage)
-    if (pdfUrl && (pdfUrl.includes("s3.amazonaws.com") || pdfUrl.includes("cloudfront.net") || pdfUrl.includes("amazonaws.com"))) {
+    if (storedPath && !storedPath.startsWith("http")) {
       try {
-        const response = await fetch(pdfUrl, { method: "HEAD" })
-        if (response.ok) {
-          // PDF exists in S3, download and return it
-          const pdfResponse = await fetch(pdfUrl)
-          if (pdfResponse.ok) {
-            const arrayBuffer = await pdfResponse.arrayBuffer()
-            pdfBuffer = Buffer.from(arrayBuffer)
-            
-            return new NextResponse(pdfBuffer, {
-              headers: {
-                "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="certificate-${certificate.certificate_number}.pdf"`,
-                "Content-Length": pdfBuffer.length.toString(),
-              },
-            })
-          }
-        }
+        pdfBuffer = await downloadFile(storedPath, CERTIFICATES_BUCKET)
+        return new NextResponse(new Uint8Array(pdfBuffer), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="certificate-${certificate.certificate_number}.pdf"`,
+            "Content-Length": pdfBuffer.length.toString(),
+          },
+        })
       } catch (error) {
-        // If fetch fails, regenerate PDF
-        logInfo("Failed to fetch existing PDF, regenerating", { error: error instanceof Error ? error.message : String(error), certificateId: certificateId })
+        // If download fails, regenerate the PDF
+        logInfo("Failed to fetch existing PDF from storage, regenerating", { error: error instanceof Error ? error.message : String(error), certificateId: certificateId })
       }
     }
+    // Legacy http(s) URLs (e.g. old S3 links) are ignored and the PDF is regenerated.
 
     // PDF doesn't exist or failed to download, generate new one
     // Use flat columns directly (database doesn't have settings JSONB column)
@@ -229,15 +222,61 @@ export async function GET(
       organizationName = "EaseLMS"
     }
 
+    // Platform-wide certificate defaults: use the course's own value if set,
+    // otherwise the platform default for the course's certificate type,
+    // otherwise the built-in design.
+    const certificateType = (course.certificate_type as "completion" | "participation" | "achievement") || "completion"
+    let platformDefaults: Record<string, any> = {}
+    try {
+      const { data: platformSettings } = await serviceSupabase
+        .from("platform_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle()
+      platformDefaults = platformSettings || {}
+    } catch (settingsError) {
+      logWarning("Failed to fetch platform certificate defaults", {
+        component: "certificates/[id]/download/route",
+        action: "GET",
+        certificateId: certificateId,
+        error: settingsError instanceof Error ? settingsError.message : String(settingsError),
+      })
+    }
+
+    const defaultTemplate = platformDefaults[`certificate_template_${certificateType}`] || undefined
+    const defaultDescription = platformDefaults[`certificate_description_${certificateType}`] || undefined
+    const defaultAdditionalText = platformDefaults[`certificate_additional_text_${certificateType}`] || undefined
+    const defaultSignatureImage = platformDefaults.certificate_signature_image || undefined
+    const defaultSignatureName = platformDefaults.certificate_signature_name || undefined
+    const defaultSignatureTitle = platformDefaults.certificate_signature_title || undefined
+
+    // Compute the [Grade] and [PD Hours] placeholder values for this learner
+    let grade: string | undefined
+    let pdHours: string | undefined
+    try {
+      const result = await getCourseGradeAndHours(serviceSupabase, certificate.user_id, certificate.course_id)
+      grade = result.grade || undefined
+      pdHours = result.pdHours
+    } catch (gradeError) {
+      logWarning("Failed to compute certificate grade and PD hours", {
+        component: "certificates/[id]/download/route",
+        action: "GET",
+        certificateId: certificateId,
+        error: gradeError instanceof Error ? gradeError.message : String(gradeError),
+      })
+    }
+
     console.log("[Certificates API] Generating PDF with data:", {
       certificateNumber: certificate.certificate_number,
       learnerName: certificate.profiles?.name || "Student",
       courseTitle: course.title,
-      certificateType: course.certificate_type,
+      certificateType,
       logoUrl: logoUrl || "NOT PROVIDED",
       organizationName: organizationName || "NOT PROVIDED",
       hasLogoUrl: !!logoUrl,
       logoUrlLength: logoUrl?.length || 0,
+      grade,
+      pdHours,
     })
 
     // Generate PDF certificate
@@ -247,16 +286,18 @@ export async function GET(
       learnerName: certificate.profiles?.name || "Student",
         courseTitle: course.title || "Course",
       issuedAt: certificate.issued_at,
-        certificateType: (course.certificate_type as "completion" | "participation" | "achievement") || "completion",
+        certificateType,
         certificateTitle: course.certificate_title || undefined,
-        certificateDescription: course.certificate_description || undefined,
-        certificateTemplate: course.certificate_template || undefined,
+        certificateDescription: course.certificate_description || defaultDescription,
+        certificateTemplate: course.certificate_template || defaultTemplate,
       organizationName,
       logoUrl,
-        signatureImage: course.signature_image || undefined,
-        signatureName: course.signature_name || undefined,
-        signatureTitle: course.signature_title || undefined,
-        additionalText: course.additional_text || undefined,
+        signatureImage: course.signature_image || defaultSignatureImage,
+        signatureName: course.signature_name || defaultSignatureName,
+        signatureTitle: course.signature_title || defaultSignatureTitle,
+        additionalText: course.additional_text || defaultAdditionalText,
+        grade,
+        pdHours,
       })
       console.log("[Certificates API] PDF generated successfully, size:", pdfBuffer.length)
     } catch (pdfError: any) {
@@ -271,32 +312,28 @@ export async function GET(
       throw pdfError // Re-throw to be caught by outer catch
     }
 
-    // Upload PDF to S3
+    // Upload the PDF to the private certificates bucket and remember its path
     const filename = `certificate-${certificate.certificate_number}.pdf`
     const courseId = certificate.course_id
-    const s3Key = getS3StoragePath("certificate", certificate.user_id, filename, undefined, undefined, courseId)
-    
-    console.log("[Certificates API] Uploading PDF to S3:", {
+    const storageKey = getStoragePath("certificate", certificate.user_id, filename, undefined, undefined, courseId)
+
+    console.log("[Certificates API] Uploading PDF to storage:", {
       certificateId: certificateId,
       courseId,
-      s3Key,
+      storageKey,
       filename,
       bufferSize: pdfBuffer.length,
     })
-    
+
     try {
-      const { key, url } = await uploadFileToS3(
-        pdfBuffer,
-        s3Key,
-        "application/pdf"
-      )
+      await uploadFile(pdfBuffer, storageKey, "application/pdf", CERTIFICATES_BUCKET)
 
-      console.log("[Certificates API] PDF uploaded successfully:", { key, url })
+      console.log("[Certificates API] PDF uploaded successfully:", { storageKey })
 
-      // Save PDF URL to database (use service role client to bypass RLS)
+      // Save the storage path to the database (use service role client to bypass RLS)
       const { error: updateError } = await serviceSupabase
         .from("certificates")
-        .update({ certificate_url: url })
+        .update({ certificate_url: storageKey })
         .eq("id", id)
 
       if (updateError) {
@@ -305,30 +342,29 @@ export async function GET(
           component: "certificates/[id]/download/route",
           action: "GET",
           certificateId: certificateId,
-          url,
+          storageKey,
         })
         // Don't fail the request, but log the error
       } else {
-        console.log("[Certificates API] certificate_url updated in database:", url)
+        console.log("[Certificates API] certificate_url updated in database:", storageKey)
       }
     } catch (uploadError) {
-      console.error("[Certificates API] Error uploading certificate PDF to S3:", uploadError)
-      logError("Error uploading certificate PDF to S3", uploadError, {
+      console.error("[Certificates API] Error uploading certificate PDF to storage:", uploadError)
+      logError("Error uploading certificate PDF to storage", uploadError, {
         component: "certificates/[id]/download/route",
         action: "GET",
         certificateId: certificateId,
         userId: certificate.user_id,
         courseId,
-        s3Key,
+        storageKey,
         error: uploadError instanceof Error ? uploadError.message : String(uploadError),
         stack: uploadError instanceof Error ? uploadError.stack : undefined,
       })
       // Continue to return PDF even if upload fails - user can still download
-      // But log the error so we know S3 upload is failing
     }
 
     // Return PDF as downloadable file
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="certificate-${certificate.certificate_number}.pdf"`,

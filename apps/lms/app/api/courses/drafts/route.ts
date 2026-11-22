@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
-import { transformVideoUrls } from "@/lib/aws/s3"
+import { transformVideoUrls } from "@/lib/storage/shared"
 import { isLessonLevelArray } from "@/lib/lesson-levels"
 
 // Save or update a course draft
@@ -803,17 +803,14 @@ export async function POST(request: Request) {
             }
           } else {
             // Create new resource
-            // Extract S3 key from URL
+            // Store the Supabase Storage path when the URL is in our storage
             let s3Key: string | null = null
             let fileHash: string | null = null
-            
-            if (resource.url.includes("s3.amazonaws.com") || resource.url.includes("cloudfront.net")) {
-              try {
-                const urlObj = new URL(resource.url)
-                s3Key = urlObj.pathname.startsWith("/") ? urlObj.pathname.slice(1) : urlObj.pathname
-              } catch (e) {
-                // Invalid URL, skip S3 key extraction
-              }
+
+            const { extractStoragePathFromUrl } = await import("@/lib/storage/shared")
+            const storageLocation = extractStoragePathFromUrl(resource.url)
+            if (storageLocation) {
+              s3Key = storageLocation.path
             }
             
             // If resource has a hash (from deduplication), store it

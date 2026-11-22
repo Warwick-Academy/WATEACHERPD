@@ -33,7 +33,6 @@ export default function LessonContentEditor({ type, content, onChange, courseId,
           <FileUpload
             type="lesson"
             accept="video/mp4,video/webm,video/ogg"
-            maxSize={2 * 1024 * 1024 * 1024} // 2GB
             multiple={false}
             courseId={courseId}
             lessonId={lessonId}
@@ -95,7 +94,6 @@ export default function LessonContentEditor({ type, content, onChange, courseId,
             <FileUpload
               type="lesson"
               accept="video/mp4,video/webm,video/ogg"
-              maxSize={2 * 1024 * 1024 * 1024} // 2GB
               multiple={false}
               courseId={courseId}
               lessonId={lessonId}
