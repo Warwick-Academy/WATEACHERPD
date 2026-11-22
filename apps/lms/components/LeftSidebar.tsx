@@ -86,13 +86,14 @@ export default function LeftSidebar({ userType }: LeftSidebarProps) {
             </a>
           ) : (
             <Button
+              key={item.href}
               variant="ghost"
               className={`w-full justify-start mb-2 ${
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"
               }`}
               asChild
             >
-              <Link href={item.href} key={item.href} prefetch={true}>
+              <Link href={item.href} prefetch={true}>
                 <>
                   <item.icon className={`mr-2 h-4 w-4 ${isActive ? "text-primary" : ""}`} />
                   {item.label}
@@ -120,13 +121,14 @@ export default function LeftSidebar({ userType }: LeftSidebarProps) {
           }
           return (
             <Button
+              key={item.href}
               variant="ghost"
               className={`w-full justify-start mb-2 ${
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"
               }`}
               asChild
             >
-              <Link href={item.href} key={item.href} prefetch={true}>
+              <Link href={item.href} prefetch={true}>
                 <>
                   <item.icon className={`mr-2 h-4 w-4 ${isActive ? "text-primary" : ""}`} />
                   {item.label}

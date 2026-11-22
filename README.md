@@ -174,9 +174,20 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
    SENDGRID_FROM_NAME=EaseLMS
    SENDGRID_REPLY_TO=support@yourdomain.com
 
+   # AI quiz generation (optional; server-only)
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   AI_QUIZ_MODEL=claude-sonnet-5-5
+
    # App URL
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
+
+   AI quiz generation requires Node.js 22 or later. Also configure these server-only variables in the
+   Netlify site's environment settings and redeploy. The model defaults to
+   `claude-sonnet-5-5` if `AI_QUIZ_MODEL` is omitted; it must be available to
+   the configured Anthropic account. Generating sends the lesson title, text
+   and optional notes to Anthropic. Video is not sent or watched. Admins must
+   review and select generated questions before adding them to a quiz.
 
 4. **Set up Supabase Database**
    

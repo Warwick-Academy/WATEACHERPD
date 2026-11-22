@@ -272,6 +272,8 @@ export default function LessonCard({
                 <QuizBuilder
                   quiz={localLesson.quiz}
                   onChange={(quiz) => updateLesson({ quiz })}
+                  lessonTitle={localLesson.title}
+                  lessonContent={localLesson.content?.html || localLesson.content?.text || ""}
                   minimumQuizScore={minimumQuizScore}
                   courseId={courseId}
                   lessonId={localLesson.id}

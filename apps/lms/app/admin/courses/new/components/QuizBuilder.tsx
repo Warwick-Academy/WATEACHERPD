@@ -15,6 +15,7 @@ import { Quiz, Question } from "../types/quiz"
 import QuestionEditor, { createQuestion } from "./question-types/QuestionEditor"
 import QuestionTypeSelector from "./question-types/QuestionTypeSelector"
 import QuizSettings from "./QuizSettings"
+import GenerateQuizDialog from "./GenerateQuizDialog"
 
 interface QuizBuilderProps {
   quiz: {
@@ -25,9 +26,11 @@ interface QuizBuilderProps {
   minimumQuizScore?: number
   courseId?: string | number
   lessonId?: string | number
+  lessonTitle: string
+  lessonContent: string
 }
 
-export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, courseId, lessonId }: QuizBuilderProps) {
+export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, courseId, lessonId, lessonTitle, lessonContent }: QuizBuilderProps) {
   const [previewMode, setPreviewMode] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, any>>({})
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set())
@@ -150,6 +153,15 @@ export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, cou
         </div>
         <Switch checked={quiz.enabled} onCheckedChange={toggleQuiz} />
       </div>
+      <GenerateQuizDialog
+        lessonTitle={lessonTitle}
+        lessonContent={lessonContent}
+        onAdd={(generated, replace) => onChange({
+          ...quiz,
+          enabled: true,
+          questions: replace ? generated : [...questions, ...generated],
+        })}
+      />
 
       {quiz.enabled && (
         <div className="space-y-4">

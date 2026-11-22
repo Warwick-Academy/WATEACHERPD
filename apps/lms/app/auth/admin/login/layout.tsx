@@ -1,6 +1,5 @@
 import { Metadata } from "next"
 import { generatePageMetadata } from "@/lib/metadata"
-import { getBrandSettings } from "@/lib/supabase/brand-settings"
 
 export async function generateMetadata(): Promise<Metadata> {
   const metadata = await generatePageMetadata("Admin Login")
@@ -8,6 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   // Hide authentication pages from search engines
   return {
     ...metadata,
+    title: typeof metadata.title === "string" ? { absolute: metadata.title } : metadata.title,
     robots: {
       index: false,
       follow: false,
@@ -15,30 +15,10 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default async function AdminLoginLayout({
+export default function AdminLoginLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Fetch brand settings to set title immediately via script
-  const brandSettings = await getBrandSettings()
-  const platformName = brandSettings.platformName || "EaseLMS"
-  const title = `Admin Login - ${platformName}`
-  
-  return (
-    <>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              if (typeof document !== 'undefined') {
-                document.title = ${JSON.stringify(title)};
-              }
-            })();
-          `,
-        }}
-      />
-      {children}
-    </>
-  )
+  return children
 }

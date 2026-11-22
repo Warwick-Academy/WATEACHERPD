@@ -56,12 +56,61 @@ function mockDatabase(tables) {
         eq(column, value) { rows = rows.filter((row) => row[column] === value); return this },
         in(column, values) { rows = rows.filter((row) => values.includes(row[column])); return this },
         single() { return Promise.resolve({ data: rows[0], error: rows.length ? null : new Error("Missing row") }) },
+        maybeSingle() { return Promise.resolve({ data: rows[0] ?? null, error: null }) },
         then(resolve, reject) { return Promise.resolve({ data: rows, error: null }).then(resolve, reject) },
       }
       return builder
     },
   }
 }
+
+function loadQuizResultsRoute(client) {
+  const file = path.join(__dirname, "..", "..", "app", "api", "courses", "[id]", "quiz-results", "route.ts")
+  const code = typescript.transpileModule(fs.readFileSync(file, "utf8"), {
+    compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2020 },
+  }).outputText
+  const mocks = {
+    "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
+    "@/lib/slug": { extractIdFromSlug: (id) => id },
+    "@/lib/utils/errorHandler": { logError() {}, logWarning() {}, logInfo() {} },
+    "@/lib/quiz/grading": loadTypeScript("grading"),
+    "@/lib/supabase/server": {
+      createClient: async () => client,
+      createServiceRoleClient: () => client,
+    },
+  }
+  const module = { exports: {} }
+  new Function("require", "module", "exports", code)(
+    (id) => mocks[id] ?? require(id), module, module.exports
+  )
+  return module.exports
+}
+
+test("quiz submission rejects incomplete, duplicated and cross-course answers", async () => {
+  const tables = {
+    enrollments: [{ user_id: "teacher", course_id: 10, status: "active" }],
+    lessons: [{ id: 20, course_id: 10 }],
+    quiz_questions: questions.map((question) => ({ ...question, lesson_id: 20 })),
+  }
+  const database = mockDatabase(tables)
+  const from = database.from
+  database.from = (table) => {
+    const builder = from(table)
+    builder.order = function () { return this }
+    return builder
+  }
+  database.auth = { getUser: async () => ({ data: { user: { id: "teacher" } } }) }
+  const { POST } = loadQuizResultsRoute(database)
+  const submit = (lessonId, answers) => POST(
+    { json: async () => ({ lessonId, answers }) },
+    { params: Promise.resolve({ id: "10" }) }
+  )
+
+  assert.equal((await submit(20, [{ questionId: 1, userAnswer: 1 }])).status, 400)
+  assert.equal((await submit(20, [{ questionId: 1, userAnswer: 1 }, { questionId: 1, userAnswer: 1 }])).status, 400)
+  assert.equal((await submit(20, [null, { questionId: 2, userAnswer: 1 }])).status, 400)
+  assert.equal((await submit(99, [{ questionId: 1, userAnswer: 1 }])).status, 400)
+})
 
 test("completion and certificate eligibility require every enabled quiz to meet its own score", async () => {
   const tables = {

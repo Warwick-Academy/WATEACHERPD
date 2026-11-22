@@ -1,12 +1,15 @@
 "use client"
 
-import { Question, QuestionType } from "../types/quiz"
+import { Question, QuestionType } from "../../types/quiz"
 import MultipleChoiceQuestion from "./MultipleChoiceQuestion"
 import TrueFalseQuestion from "./TrueFalseQuestion"
 import FillInBlankQuestion from "./FillInBlankQuestion"
 import ShortAnswerQuestion from "./ShortAnswerQuestion"
 import EssayQuestion from "./EssayQuestion"
 import MatchingQuestion from "./MatchingQuestion"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { useId } from "react"
 
 interface QuestionEditorProps {
   question: Question
@@ -14,6 +17,16 @@ interface QuestionEditorProps {
   onDelete?: () => void
   courseId?: string | number
   lessonId?: string | number
+}
+
+function QuestionExplanation({ question, onChange }: Pick<QuestionEditorProps, "question" | "onChange">) {
+  const id = useId()
+  return (
+    <div className="space-y-2 mt-4">
+      <Label htmlFor={id}>Answer explanation (optional)</Label>
+      <Textarea id={id} value={question.explanation || ""} onChange={(event) => onChange({ ...question, explanation: event.target.value })} />
+    </div>
+  )
 }
 
 export default function QuestionEditor({ question, onChange, onDelete, courseId, lessonId }: QuestionEditorProps) {
@@ -24,23 +37,29 @@ export default function QuestionEditor({ question, onChange, onDelete, courseId,
   switch (question.type) {
     case "multiple-choice":
       return (
-        <MultipleChoiceQuestion
-          question={question}
-          onChange={handleChange}
-          onDelete={onDelete}
-          courseId={courseId}
-          lessonId={lessonId}
-        />
+        <>
+          <MultipleChoiceQuestion
+            question={question}
+            onChange={handleChange}
+            onDelete={onDelete}
+            courseId={courseId}
+            lessonId={lessonId}
+          />
+          <QuestionExplanation question={question} onChange={handleChange} />
+        </>
       )
     case "true-false":
       return (
-        <TrueFalseQuestion
-          question={question}
-          onChange={handleChange}
-          onDelete={onDelete}
-          courseId={courseId}
-          lessonId={lessonId}
-        />
+        <>
+          <TrueFalseQuestion
+            question={question}
+            onChange={handleChange}
+            onDelete={onDelete}
+            courseId={courseId}
+            lessonId={lessonId}
+          />
+          <QuestionExplanation question={question} onChange={handleChange} />
+        </>
       )
     case "fill-blank":
       return (
