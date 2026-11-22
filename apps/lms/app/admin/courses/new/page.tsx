@@ -483,6 +483,9 @@ function NewCourseContent() {
       localStorage.setItem(storageKey, JSON.stringify(draftData))
       
       toast.success("Draft saved successfully")
+
+      // Refresh the course list so the draft (or unpublished state) shows there
+      invalidateCourses()
       
       // Don't navigate away - stay on the page so user can continue editing
       // The draft is saved to the database, user can continue working

@@ -57,11 +57,14 @@ export function useCourse(id: string | number | null) {
 }
 
 // Invalidate courses cache
+// refetchType "all" also refreshes queries whose pages are not currently
+// mounted (e.g. publishing in the course builder, then navigating to the
+// course list), which would otherwise keep serving the stale cached list.
 export function useInvalidateCourses() {
   const queryClient = useQueryClient()
   return () => {
-    queryClient.invalidateQueries({ queryKey: ["courses"] })
-    queryClient.invalidateQueries({ queryKey: ["course"] })
+    queryClient.invalidateQueries({ queryKey: ["courses"], refetchType: "all" })
+    queryClient.invalidateQueries({ queryKey: ["course"], refetchType: "all" })
   }
 }
 
