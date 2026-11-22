@@ -28,6 +28,7 @@ interface CertificateAssets {
   logo?: Buffer | null
   signature?: Buffer | null
   template?: Buffer | null
+  watermark?: Buffer | null
   logoOffsetX?: number
   signatureOffsetX?: number
 }
@@ -316,6 +317,27 @@ export function renderCertificate(
   }
 
   if (options.debug) drawDebug(doc, TOP_MARGIN, BOTTOM_MARGIN, MAX_TEXT_WIDTH)
+
+  // WATERMARK - large crest behind the text at low opacity
+  if (assets?.watermark) {
+    try {
+      const watermarkSize = Math.min(doc.page.width, doc.page.height) * 0.62
+      const wx = roundPt((doc.page.width - watermarkSize) / 2)
+      const wy = roundPt((doc.page.height - watermarkSize) / 2)
+      doc.save()
+      doc.opacity(0.1)
+      doc.image(assets.watermark, wx, wy, {
+        fit: [watermarkSize, watermarkSize],
+        align: "center",
+        valign: "center",
+      })
+      doc.restore()
+      console.log("[Certificate Renderer] Watermark rendered")
+    } catch (error) {
+      console.error("[Certificate Renderer] Failed to render watermark:", error)
+      doc.restore()
+    }
+  }
 
   let y = TOP_MARGIN
 

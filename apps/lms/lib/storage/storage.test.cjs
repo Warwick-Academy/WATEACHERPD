@@ -118,7 +118,7 @@ test("certificate grade averages quiz scores and PD hours come from lesson durat
     lessons: [
       { id: 1, estimated_duration: 60 },
       { id: 2, estimated_duration: 30 },
-      { id: 3, estimated_duration: 0 },
+      { id: 3, estimated_duration: 10 },
     ],
     quiz_settings: [{ lesson_id: 1, enabled: true }, { lesson_id: 2, enabled: true }, { lesson_id: 3, enabled: false }],
     quiz_questions: [
@@ -145,11 +145,45 @@ test("certificate grade averages quiz scores and PD hours come from lesson durat
   }
   const result = await gradeModule.getCourseGradeAndHours(supabase, "learner", 1)
   assert.equal(result.grade, "75%") // average of 100% and 50%
-  assert.equal(result.pdHours, "1.5") // 90 minutes
+  assert.equal(result.pdHours, "2") // 100 minutes rounds up to the next 30-minute increment
 
   tables.quiz_questions = []
   tables.quiz_results = []
   const noQuizzes = await gradeModule.getCourseGradeAndHours(supabase, "learner", 1)
   assert.equal(noQuizzes.grade, null)
-  assert.equal(noQuizzes.pdHours, "1.5")
+  assert.equal(noQuizzes.pdHours, "2")
+
+  tables.lessons = [{ id: 1, estimated_duration: 45 }]
+  const partial = await gradeModule.getCourseGradeAndHours(supabase, "learner", 1)
+  assert.equal(partial.pdHours, "1") // 45 minutes rounds up to an hour
+
+  tables.lessons = [{ id: 1, estimated_duration: 61 }]
+  const overHour = await gradeModule.getCourseGradeAndHours(supabase, "learner", 1)
+  assert.equal(overHour.pdHours, "1.5") // 61 minutes rounds up to an hour and a half
+})
+
+test("the grade clause is removed when a course has no grade", () => {
+  const pdf = loadTypeScript(path.join(__dirname, "..", "certificates", "generate-pdf.ts"), {
+    "pdfkit": function () {},
+    "./pdfkit-font-patch": {},
+    "./certificate-renderer": {},
+  })
+  const completion = "This certifies that [Student Name] has successfully completed [Course Name] with a final score of [Grade]."
+  const achievement = "This certifies that [Student Name] has achieved distinction in [Course Name] with a final score of [Grade]."
+  assert.equal(
+    pdf.applyCertificatePlaceholders(completion, "92%", "1.5"),
+    "This certifies that [Student Name] has successfully completed [Course Name] with a final score of 92%."
+  )
+  assert.equal(
+    pdf.applyCertificatePlaceholders(completion, undefined, "1.5"),
+    "This certifies that [Student Name] has successfully completed [Course Name]."
+  )
+  assert.equal(
+    pdf.applyCertificatePlaceholders(achievement, undefined, "1.5"),
+    "This certifies that [Student Name] has achieved distinction in [Course Name]."
+  )
+  assert.equal(
+    pdf.applyCertificatePlaceholders("Professional development hours awarded: [PD Hours]", undefined, "1.5"),
+    "Professional development hours awarded: 1.5"
+  )
 })

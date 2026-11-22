@@ -22,6 +22,29 @@ interface CertificateData {
   additionalText?: string // Additional text to display on certificate
   grade?: string // Final score shown for the [Grade] placeholder (e.g., "92%")
   pdHours?: string // Professional development hours for the [PD Hours] placeholder
+  watermarkUrl?: string // Image (crest) drawn large behind the text at low opacity
+}
+
+/**
+ * Substitute the [Grade] and [PD Hours] placeholders.
+ * When there is no grade (e.g. the course has no quizzes), the whole clause
+ * containing [Grade] (such as "with a final score of [Grade]") is removed so
+ * the certificate never shows "N/A".
+ */
+export function applyCertificatePlaceholders(text: string, grade?: string, pdHours?: string): string {
+  let out = text
+  if (grade) {
+    out = out.replace(/\[grade\]/gi, grade)
+  } else {
+    // Remove a connecting clause that ends in the [Grade] placeholder
+    out = out.replace(/[,;]?\s*\b(?:with|and|achieving|at|scoring)\b[^.!?]*?\[grade\][^.!?,;]*/gi, "")
+    // Remove any remaining bare placeholder
+    out = out.replace(/\s*\[grade\]/gi, "")
+    // Tidy up spacing left behind
+    out = out.replace(/\s+([.!?,;:])/g, "$1").replace(/ {2,}/g, " ")
+  }
+  out = out.replace(/\[pd[\s_]*hours\]/gi, pdHours || "0")
+  return out.trim()
 }
 
 // Helper function to get the font directory path
@@ -91,6 +114,21 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   const buffer = Buffer.from(arrayBuffer)
   console.log("[PDF Generation] Image fetched successfully, size:", buffer.length, "bytes")
   return buffer
+}
+
+// Rasterize any image (including SVG) into a PNG that PDFKit can embed.
+// Returns the original buffer when conversion is not possible.
+async function toPdfCompatiblePng(buffer: Buffer): Promise<Buffer> {
+  try {
+    const sharp = (await import("sharp")).default
+    return await sharp(buffer, { density: 300 })
+      .resize(1200, 1200, { fit: "inside", withoutEnlargement: false })
+      .png()
+      .toBuffer()
+  } catch (error) {
+    console.warn("[PDF Generation] Image rasterization failed, using original image:", error)
+    return buffer
+  }
 }
 
 // Make a signature image blend with the certificate background: light (paper)
@@ -283,6 +321,18 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
         }
       }
 
+      // Fetch watermark (crest drawn behind the text at low opacity)
+      let watermarkBuffer: Buffer | null = null
+      if (data.watermarkUrl) {
+        try {
+          console.log("[PDF Generation] Fetching watermark image:", data.watermarkUrl)
+          watermarkBuffer = await toPdfCompatiblePng(await fetchImageBuffer(data.watermarkUrl))
+        } catch (error) {
+          console.warn("[PDF Generation] Failed to fetch watermark image:", error)
+          watermarkBuffer = null
+        }
+      }
+
       // Prepare certificate title
       const getCertificateTitle = () => {
         if (data.certificateTitle) {
@@ -309,17 +359,16 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
 
       // Prepare description template, substituting [Grade] and [PD Hours].
       // [Student Name] and [Course Name] are substituted (and bolded) by the renderer.
-      const substitutePlaceholders = (text: string): string =>
-        text
-          .replace(/\[grade\]/gi, data.grade || "N/A")
-          .replace(/\[pd[\s_]*hours\]/gi, data.pdHours || "0")
-
-      const descriptionTemplate = substitutePlaceholders(
+      const descriptionTemplate = applyCertificatePlaceholders(
         data.certificateDescription ||
-        "This certifies that [Student Name] has successfully completed the [Course Name]."
+        "This certifies that [Student Name] has successfully completed the [Course Name].",
+        data.grade,
+        data.pdHours
       )
 
-      const additionalText = data.additionalText ? substitutePlaceholders(data.additionalText) : undefined
+      const additionalText = data.additionalText
+        ? applyCertificatePlaceholders(data.additionalText, data.grade, data.pdHours)
+        : undefined
 
       // Prepare renderer data
       const rendererData: RendererData = {
@@ -340,6 +389,7 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
         logo: logoBuffer,
         signature: signatureBuffer,
         template: templateBuffer,
+        watermark: watermarkBuffer,
       }
 
       console.log("[PDF Generation] Calling renderCertificate with:", {

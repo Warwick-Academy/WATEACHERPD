@@ -7,7 +7,8 @@ import { getQuizPercentage, type QuizGradeQuestion, type QuizGradeResult } from 
  * - Grade: the average of the learner's quiz percentages across every lesson
  *   with an enabled quiz, rounded to a whole percentage (null when the course
  *   has no quizzes or the learner has no complete results).
- * - PD hours: the sum of the lessons' estimated durations (minutes) in hours.
+ * - PD hours: the sum of the lessons' estimated durations (minutes), rounded
+ *   up to the next 30-minute increment and expressed in hours (0.5, 1, 1.5, 2...).
  */
 export async function getCourseGradeAndHours(
   supabase: SupabaseClient,
@@ -24,8 +25,9 @@ export async function getCourseGradeAndHours(
     (sum, lesson) => sum + (Number(lesson.estimated_duration) || 0),
     0
   )
-  const hours = totalMinutes / 60
-  const pdHours = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 10) / 10)
+  // Round up to the next 30-minute increment
+  const hours = Math.ceil(totalMinutes / 30) / 2
+  const pdHours = Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
 
   const lessonIds = (lessons || []).map((lesson) => lesson.id)
   if (lessonIds.length === 0) return { grade: null, pdHours }

@@ -192,6 +192,7 @@ export async function GET(
     // Fetch brand settings to use platform logo and name
     let logoUrl: string | undefined
     let organizationName: string | undefined
+    let watermarkUrl: string | undefined
     
     try {
       const brandSettings = await getBrandSettings()
@@ -203,6 +204,10 @@ export async function GET(
       organizationName = (brandSettings.platformName && brandSettings.platformName.trim() !== "")
         ? brandSettings.platformName
         : undefined
+      // The favicon (crest) is drawn large behind the text as a watermark
+      watermarkUrl = (brandSettings.favicon && brandSettings.favicon.trim() !== "")
+        ? brandSettings.favicon
+        : logoUrl
       
       console.log("[Certificates API] Brand settings loaded:", {
         logoUrl,
@@ -298,6 +303,7 @@ export async function GET(
         additionalText: course.additional_text || defaultAdditionalText,
         grade,
         pdHours,
+        watermarkUrl,
       })
       console.log("[Certificates API] PDF generated successfully, size:", pdfBuffer.length)
     } catch (pdfError: any) {
