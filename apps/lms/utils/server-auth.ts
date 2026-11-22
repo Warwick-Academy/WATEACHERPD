@@ -30,6 +30,7 @@ export async function getServerAuthState(): Promise<{ isLoggedIn: boolean; userT
       .from("enrollments")
       .select("course_id, status, progress")
       .eq("user_id", profile.id)
+      .neq("status", "cancelled")
 
     const enrolledCourseIds = enrollments?.map((e) => e.course_id) || []
     const completedCourseIds = enrollments?.filter((e) => e.status === "completed").map((e) => e.course_id) || []

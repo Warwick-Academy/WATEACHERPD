@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { MultipleChoiceQuestion, TrueFalseQuestion } from "../types/quiz"
+import { getQuizDifficulty, type LessonLevel } from "@/lib/lesson-levels"
 
 type GeneratedQuestion = MultipleChoiceQuestion | TrueFalseQuestion
 type GeneratedType = GeneratedQuestion["type"]
@@ -17,10 +18,11 @@ type GeneratedType = GeneratedQuestion["type"]
 interface GenerateQuizDialogProps {
   lessonTitle: string
   lessonContent: string
+  lessonLevels?: LessonLevel[]
   onAdd: (questions: GeneratedQuestion[], replace: boolean) => void
 }
 
-export default function GenerateQuizDialog({ lessonTitle, lessonContent, onAdd }: GenerateQuizDialogProps) {
+export default function GenerateQuizDialog({ lessonTitle, lessonContent, lessonLevels, onAdd }: GenerateQuizDialogProps) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const [extraText, setExtraText] = useState("")
@@ -37,7 +39,9 @@ export default function GenerateQuizDialog({ lessonTitle, lessonContent, onAdd }
   useEffect(() => () => request.current?.abort(), [])
 
   const changeOpen = (next: boolean) => {
-    if (!next) {
+    if (next) {
+      setDifficulty(getQuizDifficulty(lessonLevels))
+    } else {
       request.current?.abort()
       request.current = null
       setLoading(false)

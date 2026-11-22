@@ -1,8 +1,20 @@
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
+import { createServiceRoleClient } from "@/lib/supabase/server"
 import { getStripeClient } from "@/lib/payments/stripe"
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import Stripe from "stripe"
+
+async function reportExistingEnrollment(client: ReturnType<typeof createServiceRoleClient>, userId: string, courseId: number) {
+  const { data, error } = await client.from("enrollments").select("status").eq("user_id", userId).eq("course_id", courseId).maybeSingle()
+  if (error || !data) {
+    console.error("Could not verify existing enrollment after payment:", error)
+    return false
+  }
+  if (data.status === "cancelled") {
+    console.error("Payment received for a cancelled assignment; administrator review is required.", { userId, courseId })
+  }
+  return true
+}
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -26,7 +38,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
   }
 
-  const supabase = await createClient()
   const serviceSupabase = createServiceRoleClient()
 
   // Handle Payment Intent (legacy, for embedded forms)
@@ -70,24 +81,34 @@ export async function POST(request: Request) {
     }
 
     // Create enrollment
-    const { data: enrollmentData } = await serviceSupabase.from("enrollments").upsert({
+    const { data: enrollmentData, error: enrollmentError } = await serviceSupabase.from("enrollments").upsert({
       user_id: userId,
       course_id: parseInt(courseId),
       status: "active",
       progress: 0,
-    }).select().single()
+    }, { onConflict: "user_id,course_id", ignoreDuplicates: true }).select().maybeSingle()
+    if (enrollmentError) {
+      console.error("Failed to create enrollment after payment:", enrollmentError)
+      return NextResponse.json({ error: "Failed to create enrollment after payment" }, { status: 500 })
+    }
+    if (!enrollmentData && !await reportExistingEnrollment(serviceSupabase, userId, parseInt(courseId))) {
+      return NextResponse.json({ error: "Failed to verify enrollment after payment" }, { status: 500 })
+    }
 
     // Update enrolled_students count in courses table if enrollment was created
     if (enrollmentData) {
-      const { count: currentCount } = await supabase
+      const { count: currentCount, error: countError } = await serviceSupabase
         .from("enrollments")
         .select("*", { count: "exact", head: true })
         .eq("course_id", parseInt(courseId))
+        .neq("status", "cancelled")
 
-      await supabase
-        .from("courses")
-        .update({ enrolled_students: currentCount || 0 })
-        .eq("id", parseInt(courseId))
+      if (countError || currentCount === null) {
+        console.error("Failed to count course enrollments after payment:", countError)
+      } else {
+        const { error } = await serviceSupabase.from("courses").update({ enrolled_students: currentCount }).eq("id", parseInt(courseId))
+        if (error) console.error("Failed to update course enrollment count after payment:", error)
+      }
 
       // Send enrollment email notification (non-blocking)
       if (enrollmentData.id) {
@@ -162,24 +183,34 @@ export async function POST(request: Request) {
         }
 
         // Create enrollment
-        const { data: enrollmentData } = await serviceSupabase.from("enrollments").upsert({
+        const { data: enrollmentData, error: enrollmentError } = await serviceSupabase.from("enrollments").upsert({
           user_id: userId,
           course_id: parseInt(courseId),
           status: "active",
           progress: 0,
-        }).select().single()
+        }, { onConflict: "user_id,course_id", ignoreDuplicates: true }).select().maybeSingle()
+        if (enrollmentError) {
+          console.error("Failed to create enrollment after payment:", enrollmentError)
+          return NextResponse.json({ error: "Failed to create enrollment after payment" }, { status: 500 })
+        }
+        if (!enrollmentData && !await reportExistingEnrollment(serviceSupabase, userId, parseInt(courseId))) {
+          return NextResponse.json({ error: "Failed to verify enrollment after payment" }, { status: 500 })
+        }
 
         // Update enrolled_students count in courses table if enrollment was created
         if (enrollmentData) {
-          const { count: currentCount } = await serviceSupabase
+          const { count: currentCount, error: countError } = await serviceSupabase
             .from("enrollments")
             .select("*", { count: "exact", head: true })
             .eq("course_id", parseInt(courseId))
+            .neq("status", "cancelled")
 
-          await serviceSupabase
-            .from("courses")
-            .update({ enrolled_students: currentCount || 0 })
-            .eq("id", parseInt(courseId))
+          if (countError || currentCount === null) {
+            console.error("Failed to count course enrollments after payment:", countError)
+          } else {
+            const { error } = await serviceSupabase.from("courses").update({ enrolled_students: currentCount }).eq("id", parseInt(courseId))
+            if (error) console.error("Failed to update course enrollment count after payment:", error)
+          }
 
           // Send enrollment email notification (non-blocking)
           if (enrollmentData.id) {

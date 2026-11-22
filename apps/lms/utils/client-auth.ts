@@ -159,6 +159,7 @@ export function useClientAuthState(): { isLoggedIn: boolean; userType?: UserType
             .from("enrollments")
             .select("course_id, status, progress")
             .eq("user_id", profile.id)
+            .neq("status", "cancelled")
           
           if (!enrollmentsError) {
             enrollments = enrollmentsData

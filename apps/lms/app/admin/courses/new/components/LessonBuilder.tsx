@@ -7,6 +7,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-p
 import { Plus } from "lucide-react"
 import LessonCard from "./LessonCard"
 import BulkOperations from "./BulkOperations"
+import type { LessonLevel } from "@/lib/lesson-levels"
 
 interface Resource {
   id: string
@@ -36,6 +37,7 @@ export interface Lesson {
     questions: Question[]
   }
   estimatedDuration?: number
+  levels?: LessonLevel[]
 }
 
 interface LessonBuilderProps {
@@ -74,6 +76,7 @@ export default function LessonBuilder({ lessons, onUpdate, minimumQuizScore = 50
         questions: [],
       },
       estimatedDuration: 0,
+      levels: [],
     }
     const updatedLessons = [...localLessons, newLesson]
     setLocalLessons(updatedLessons)

@@ -1,6 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
+import { randomBytes } from "node:crypto"
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
   // Process users to include enrollment counts
   const processedUsers = (users || []).map((user: any) => {
     const enrollments = user.enrollments || []
-    const enrolledCourses = enrollments.map((e: any) => e.course_id)
+    const enrolledCourses = enrollments.filter((e: any) => e.status !== "cancelled").map((e: any) => e.course_id)
     const completedCourses = enrollments.filter((e: any) => e.status === "completed").map((e: any) => e.course_id)
     
     return {
@@ -167,66 +168,53 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  // Use service role client for admin operations
-  const adminClient = serviceClient || supabase
-
-  const { email, password, name, userType } = await request.json()
-
-  if (!email || !password || !name || !userType) {
-    return NextResponse.json(
-      { error: "Email, password, name, and userType are required" },
-      { status: 400 }
-    )
+  if (!serviceClient) {
+    return NextResponse.json({ error: "User creation is not configured on the server" }, { status: 500 })
   }
 
-  // Validate and sanitize userType to ensure it's either "user", "admin", or "instructor"
-  let validatedUserType = "user"
-  if (typeof userType === "string") {
-    const trimmed = userType.trim().toLowerCase()
-    if (trimmed === "user" || trimmed === "admin" || trimmed === "instructor") {
-      validatedUserType = trimmed
-    } else {
-      return NextResponse.json(
-        { error: `Invalid userType "${userType}". Must be "user", "admin", or "instructor"` },
-        { status: 400 }
-      )
-    }
-  } else {
-    return NextResponse.json(
-      { error: `userType must be a string. Received: ${typeof userType}` },
-      { status: 400 }
-    )
+  const { email, password, name, userType, generatePassword } = await request.json()
+  if (typeof name !== "string" || !name.trim() || typeof email !== "string" ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+      (userType !== "user" && userType !== "admin") ||
+      (generatePassword !== true && (typeof password !== "string" || password.length < 8))) {
+    return NextResponse.json({ error: "Provide a name, valid email, role and password of at least 8 characters" }, { status: 400 })
   }
 
-  // Create auth user
-  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-    email,
-    password,
+  const temporaryPassword = generatePassword === true ? `Aa1!${randomBytes(18).toString("base64url")}` : undefined
+  const { data: authUser, error: authError } = await serviceClient.auth.admin.createUser({
+    email: email.trim().toLowerCase(),
+    password: temporaryPassword ?? password,
     email_confirm: true,
+    user_metadata: { name: name.trim() },
   })
 
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 })
+  if (authError || !authUser.user) {
+    logError("Error creating user", authError || new Error("Missing created user"), { component: "users/route", action: "POST" })
+    const duplicate = authError?.code === "email_exists" || authError?.code === "user_already_exists" || authError?.status === 422
+    return NextResponse.json({ error: duplicate ? "An account with this email may already exist, or the account details are invalid." : "Failed to create user" }, { status: duplicate ? 409 : 500 })
   }
 
-  // Create profile using admin client
-  const { data: newProfile, error: createProfileError } = await adminClient
+  // The auth trigger creates the profile; update it rather than inserting a duplicate.
+  const { data: newProfile, error: profileError } = await serviceClient
     .from("profiles")
-    .insert({
-      id: authUser.user.id,
-      email,
-      name,
-      user_type: validatedUserType,
-    })
+    .update({ name: name.trim(), user_type: userType })
+    .eq("id", authUser.user.id)
     .select()
     .single()
 
-  if (createProfileError) {
-    // Rollback: delete auth user if profile creation fails
-    await supabase.auth.admin.deleteUser(authUser.user.id)
-    return NextResponse.json({ error: createProfileError.message }, { status: 500 })
+  if (profileError || !newProfile) {
+    logError("Error updating newly created profile", profileError || new Error("Missing profile"), { component: "users/route", action: "POST" })
+    const { error: rollbackError } = await serviceClient.auth.admin.deleteUser(authUser.user.id)
+    if (rollbackError) {
+      logError("Failed to remove account after profile error", rollbackError, { component: "users/route", action: "POST", userId: authUser.user.id })
+      return NextResponse.json({ error: "Account creation was incomplete; an administrator must inspect the account before retrying." }, { status: 500 })
+    }
+    return NextResponse.json({ error: "Failed to create user profile" }, { status: 500 })
   }
 
-  return NextResponse.json({ user: newProfile }, { status: 201 })
+  return NextResponse.json({ user: newProfile, ...(temporaryPassword ? { temporaryPassword } : {}) }, {
+    status: 201,
+    headers: { "Cache-Control": "no-store" },
+  })
 }
 

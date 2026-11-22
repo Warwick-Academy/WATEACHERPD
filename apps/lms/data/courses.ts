@@ -1,7 +1,10 @@
+import type { LessonLevel } from "@/lib/lesson-levels"
+
 export interface Lesson {
   id?: string | number
   title: string
   type?: string
+  levels?: LessonLevel[]
   content?: {
     url?: string // Video URL (S3)
     text?: string // For text-based lessons

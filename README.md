@@ -228,6 +228,16 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - Configure `SUPABASE_SERVICE_ROLE_KEY` on the LMS server. Never expose this key to the browser. The quiz-results and certificate routes require it.
       - Each quiz can optionally override the course minimum passing score. New completions and certificates require a passing result for every enabled quiz; previously issued certificates are unchanged.
 
+   g. **Add lesson levels**
+      - Apply `apps/lms/supabase/migrations/20261122000000_lesson_levels.sql` in the Supabase SQL Editor before running this version of the LMS. Existing lessons start with no levels.
+      - Editors can select any combination of Beginner, Intermediate and Advanced for each lesson. Course badges show the union of lesson levels, and the lowest selected level sets the AI quiz generator's initial difficulty; editors can override it.
+
+   h. **Enable admin assignments and cancellation**
+      - Apply `apps/lms/supabase/migrations/20261122010000_cancelled_enrollment_access.sql` before deploying the matching application code. It updates row-level security policies and routes enrolment updates through the server.
+      - Admins can add teachers or admins and assign published courses from Learner Management. CSV imports use `name,email,role` (role is optional: `teacher` or `admin`); review the preview before importing.
+      - Generated passwords are shown once or included in the downloadable import results. Transfer them securely and delete the results file when no longer needed. Assignments work without SendGrid; notifications require `SENDGRID_API_KEY`.
+      - Cancelling retains lesson progress and prevents further access through the LMS. Content already downloaded, cached or available through a public external video URL cannot be recalled. Reassigning restores the existing enrolment and its progress.
+
 5. **Start the development server**
    ```bash
    npm run dev

@@ -27,13 +27,16 @@ import type { User } from "@/data/users"
 import { toast } from "sonner"
 import { formatCurrency } from "@/lib/utils/currency"
 import { useCourses, useRealtimeCourses, useInvalidateCourses, useSettings } from "@/lib/react-query/hooks"
+import LessonLevelBadges from "@/components/LessonLevelBadges"
+import { getCourseLevels, type LessonLevel } from "@/lib/lesson-levels"
+import AssignUsersDialog from "@/components/admin/AssignUsersDialog"
 
 interface Course {
   id: number
   title: string
   description: string
   image: string
-  lessons: Array<{ id?: string | number; estimatedDuration?: number }>
+  lessons: Array<{ id?: string | number; estimatedDuration?: number; levels?: LessonLevel[] }>
   price?: number
   totalDurationMinutes?: number
   totalHours?: number
@@ -58,6 +61,7 @@ export default function ManageCoursesPage() {
   const [deleting, setDeleting] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [draftCourses, setDraftCourses] = useState<Course[]>([])
+  const [assignmentCourse, setAssignmentCourse] = useState<Course | null>(null)
 
   // Use React Query hooks for data fetching with caching
   const { data: coursesData, isPending: coursesPending, error: coursesError } = useCourses({ all: true })
@@ -432,6 +436,7 @@ export default function ManageCoursesPage() {
           )}
         </div>
         <CardTitle className="text-base sm:text-lg mb-2 line-clamp-2">{course.title}</CardTitle>
+        <LessonLevelBadges levels={getCourseLevels(course.lessons)} />
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground mt-3 sm:mt-4">
           <div className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />
@@ -483,7 +488,10 @@ export default function ManageCoursesPage() {
       <CardContent className="flex-grow px-4 sm:px-6 pb-4 sm:pb-6">
         <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 line-clamp-3">{course.description}</p>
       </CardContent>
-      <CardFooter className="flex flex-row gap-2 p-4 sm:p-6 pt-0">
+      <CardFooter className="flex flex-row flex-wrap gap-2 p-4 sm:p-6 pt-0">
+        {!isDraft && userType === "admin" && (
+          <Button variant="outline" size="sm" onClick={() => setAssignmentCourse(course)}>Assign to users</Button>
+        )}
         {!isDraft && (
         <Link href={`/admin/courses/preview/${createCourseSlug(course.title, course.id)}`} className="flex-1" prefetch={true}>
           <Button 
@@ -706,6 +714,7 @@ export default function ManageCoursesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {userType === "admin" && <AssignUsersDialog course={assignmentCourse} open={assignmentCourse !== null} onOpenChange={(open) => { if (!open) setAssignmentCourse(null) }} />}
         </>
       )}
     </div>

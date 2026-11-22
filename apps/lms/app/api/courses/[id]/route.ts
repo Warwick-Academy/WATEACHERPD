@@ -71,7 +71,7 @@ export async function GET(
     if (course) {
       const { data: lessonsData, error: lessonsError } = await supabase
         .from("lessons")
-        .select("id, title, type, video_url, text_content, estimated_duration, is_required, order_index")
+        .select("id, title, type, video_url, text_content, estimated_duration, levels, is_required, order_index")
         .eq("course_id", numericId)
         .order("order_index", { ascending: true })
       
@@ -81,7 +81,7 @@ export async function GET(
           action: "GET",
           courseId: numericId,
         })
-        // Don't fail the entire request if lessons can't be fetched
+        return NextResponse.json({ error: "Failed to load course lessons" }, { status: 500 })
       } else {
         lessons = lessonsData || []
         logInfo(`Course API: Fetched ${lessons.length} lessons for course ${numericId}`, { courseId: numericId })
@@ -153,13 +153,18 @@ export async function GET(
       if (!basicError && basicCourse) {
         course = basicCourse
         // Fetch lessons separately
-        const { data: lessonsData } = await supabase
+        const { data: lessonsData, error: lessonsError } = await supabase
           .from("lessons")
-          .select("id, title, type, video_url, text_content, estimated_duration, is_required, order_index")
+          .select("id, title, type, video_url, text_content, estimated_duration, levels, is_required, order_index")
           .eq("course_id", numericId)
           .order("order_index", { ascending: true })
         
-        course.lessons = lessonsData || []
+        if (lessonsError) {
+          logError("Error fetching lessons", lessonsError, { component: "courses/[id]/route", action: "GET", courseId: numericId })
+          return NextResponse.json({ error: "Failed to load course lessons" }, { status: 500 })
+        }
+        lessons = lessonsData || []
+        course.lessons = lessons
         
         // Fetch profile separately
         const { data: profileData } = await supabase
@@ -199,6 +204,22 @@ export async function GET(
 
     if (!course) {
       return NextResponse.json({ error: "Course not found" }, { status: 404 })
+    }
+
+    const viewerClient = await createClient()
+    const { data: { user: viewer } } = await viewerClient.auth.getUser()
+    let canViewLessonContent = false
+    if (viewer) {
+      const [{ data: viewerProfile, error: profileError }, { data: viewerEnrollment, error: enrollmentError }] = await Promise.all([
+        supabase.from("profiles").select("user_type").eq("id", viewer.id).maybeSingle(),
+        supabase.from("enrollments").select("status").eq("user_id", viewer.id).eq("course_id", numericId).maybeSingle(),
+      ])
+      if (profileError || enrollmentError) {
+        logError("Failed to check course access", profileError || enrollmentError, { component: "courses/[id]/route", action: "GET", courseId: numericId })
+        return NextResponse.json({ error: "Failed to verify course access" }, { status: 500 })
+      }
+      canViewLessonContent = viewerProfile?.user_type === "admin" || viewerProfile?.user_type === "instructor" ||
+        viewerEnrollment?.status === "active" || viewerEnrollment?.status === "completed"
     }
 
     // Process course to ensure proper structure
@@ -269,6 +290,7 @@ export async function GET(
       .from("enrollments")
       .select("*", { count: "exact", head: true })
       .eq("course_id", numericId)
+      .neq("status", "cancelled")
 
     if (enrollmentCountError) {
       logWarning("Course API: Error fetching enrollment count", {
@@ -452,7 +474,7 @@ export async function GET(
           }
           
           // Handle quiz shuffling if enabled
-          if (quizSettings.shuffleQuiz && quizSettings.enabled && quiz_questions.length > 0) {
+          if (canViewLessonContent && quizSettings.shuffleQuiz && quizSettings.enabled && quiz_questions.length > 0) {
             try {
               // Get current user for shuffle seed
               const { createClient: createUserClient } = await import("@/lib/supabase/server")
@@ -636,8 +658,8 @@ export async function GET(
         const { resources: contentResources, ...contentRest } = content
         
         const processedLesson = {
-        id: lesson.id,
-        title: lesson.title,
+          id: lesson.id,
+          title: lesson.title,
           type: lesson.type || contentRest.type,
           settings: {
             isRequired: lesson.is_required !== undefined ? lesson.is_required : true,
@@ -645,6 +667,7 @@ export async function GET(
           // Spread content properties (url, html, text, estimatedDuration, etc)
           // But NOT quiz and resources (we process those separately)
           ...contentRest,
+          levels: lesson.levels ?? [],
           resources: resources,
           quiz_questions: quiz_questions,
           quiz: quizSettings, // Include quiz settings for reference
@@ -670,7 +693,16 @@ export async function GET(
       ...course,
       image: course.image || course.thumbnail || null, // Explicitly ensure image field is included
       creator,
-      lessons: processedLessons, // Always include lessons (even if empty array)
+      lessons: canViewLessonContent ? processedLessons : processedLessons.map((lesson) => ({
+        id: lesson.id,
+        title: lesson.title,
+        type: lesson.type,
+        settings: lesson.settings,
+        levels: lesson.levels,
+        estimatedDuration: lesson.estimatedDuration,
+        quiz_questions: lesson.quiz_questions.map((question: any) => ({ id: question.id })),
+        resources: lesson.resources.map((resource: any) => ({ title: resource.title, type: resource.type })),
+      })),
       totalDurationMinutes,
       totalHours,
       enrolledStudents: enrollmentCount || 0, // Total enrollment count

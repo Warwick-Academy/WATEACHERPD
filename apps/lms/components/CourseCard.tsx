@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { BookOpen, Clock, Banknote, Eye, Play } from "lucide-react"
 import type { Module } from "@/data/courses"
-import { isEnrolledInCourse, enrollInCourse, handleCoursePayment } from "@/utils/enrollment"
+import { enrollInCourse, handleCoursePayment } from "@/utils/enrollment"
 import { useState, useEffect } from "react"
 import { getClientAuthState } from "@/utils/client-auth"
 import { toast } from "sonner"
@@ -18,6 +18,8 @@ import { useEnrollCourse, useProgress, useCoursePrice, useSettings } from "@/lib
 import { useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { formatCurrency } from "@/lib/utils/currency"
+import LessonLevelBadges from "@/components/LessonLevelBadges"
+import { getCourseLevels } from "@/lib/lesson-levels"
 
 interface CourseCardProps {
   course: Module
@@ -58,7 +60,7 @@ export default function CourseCard({
   }, [])
   
   // Check enrollment status using utility function
-  const isEnrolled = isEnrolledInCourse(course.id, user) || enrolledCourseIds.includes(course.id)
+  const isEnrolled = enrolledCourseIds.includes(course.id)
   const isCompleted = completedCourseIds.includes(course.id)
   // Priority: completed > enrolled > available
   // Only use passed status if it's specifically set to something other than "available"
@@ -293,6 +295,7 @@ export default function CourseCard({
             {course.title}
           </CardTitle>
         </Link>
+        <LessonLevelBadges levels={getCourseLevels(course.lessons)} />
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-4">
           <div className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />

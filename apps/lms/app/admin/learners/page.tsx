@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -13,23 +14,20 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Search, Mail, BookOpen, Award, TrendingUp, Filter, Plus, Loader2 } from "lucide-react"
 import AdminLearnersSkeleton from "@/components/AdminLearnersSkeleton"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useClientAuthState } from "@/utils/client-auth"
-import { useLearners, useInvalidateLearners, useAdminStats, useRealtimeAdminStats, useCourses } from "@/lib/react-query/hooks"
+import { useLearners, useRealtimeAdminStats } from "@/lib/react-query/hooks"
+import AddUserDialog from "@/components/admin/AddUserDialog"
+import ImportUsersDialog from "@/components/admin/ImportUsersDialog"
+import AssignCoursesDialog from "@/components/admin/AssignCoursesDialog"
+import type { AssignmentLearner } from "@/lib/admin/assignments"
+import type { Learner as ApiLearner } from "@/lib/react-query/hooks/useLearners"
 
 interface Learner {
   id: string
@@ -41,25 +39,17 @@ interface Learner {
   progress: { [courseId: number]: number }
 }
 
-interface Course {
-  id: number
-  title: string
-}
-
-interface Stats {
-  totalLearners: number
-}
-
 export default function LearnersPage() {
   const router = useRouter()
   const { user, loading: authLoading, userType } = useClientAuthState()
   const [searchTerm, setSearchTerm] = useState("")
   const [enrollmentFilter, setEnrollmentFilter] = useState<string>("all")
-  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<Learner | null>(null)
-  const [selectedCourse, setSelectedCourse] = useState<string>("")
+  const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignmentTargets, setAssignmentTargets] = useState<AssignmentLearner[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [mounted, setMounted] = useState(false)
-  const [enrolling, setEnrolling] = useState(false)
 
   // Use React Query hooks for data fetching with caching
   const { data: learnersData, isPending: learnersPending, error: learnersError } = useLearners({
@@ -67,18 +57,21 @@ export default function LearnersPage() {
     enrollmentFilter: enrollmentFilter !== "all" ? enrollmentFilter : undefined,
   })
   
-  const { data: stats, isPending: statsPending, error: statsError } = useAdminStats()
+  const { data: allLearnersData } = useLearners()
+  const allLearners: ApiLearner[] = allLearnersData?.learners || []
+  const { data: stats, isPending: statsPending, error: statsError } = useQuery({
+    queryKey: ["learner-stats"],
+    queryFn: async (): Promise<{ totalLearners: number; totalEnrollments: number; totalCompleted: number }> => {
+      const response = await fetch("/api/admin/learner-stats")
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to load learner statistics")
+      return result
+    },
+  })
   
   // Set up real-time subscription for admin stats (which also affects learners)
   useRealtimeAdminStats()
   
-  // Get cache invalidation function
-  const invalidateLearners = useInvalidateLearners()
-  
-  // Fetch courses for enrollment dialog (only when dialog is open)
-  const { data: coursesData, isPending: coursesPending } = useCourses()
-  const courses = useMemo(() => coursesData?.courses || [], [coursesData])
-
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -86,15 +79,14 @@ export default function LearnersPage() {
   useEffect(() => {
     if (!authLoading) {
       const isAdmin = userType === "admin"
-      const isInstructor = (userType as string) === "instructor"
-      if (!user || (!isAdmin && !isInstructor)) {
+      if (!user || !isAdmin) {
         router.push("/auth/admin/login")
       }
     }
   }, [user, userType, authLoading, router])
 
   // Process learners data from React Query
-  const learners = useMemo(() => {
+  const learners = useMemo<Learner[]>(() => {
     if (!learnersData?.learners) return []
     return learnersData.learners.map((learner: any) => ({
       id: learner.id,
@@ -114,69 +106,8 @@ export default function LearnersPage() {
   // Once we have data, never show skeleton again (even during refetches)
   // Show cached data instantly even if isPending is true
   const hasCachedData = !!learnersData?.learners
-  const showSkeleton = (authLoading || !user || (userType !== "admin" && userType !== "instructor")) && !hasCachedData && learnersPending
-
-  const handleEnrollClick = (learner: Learner) => {
-    setSelectedUser(learner)
-    setEnrollDialogOpen(true)
-  }
-
-  const handleEnrollConfirm = async () => {
-    if (!selectedUser || !selectedCourse) return
-
-    try {
-      setEnrolling(true)
-      const response = await fetch("/api/enrollments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          courseId: parseInt(selectedCourse),
-          userId: selectedUser.id, // We need to pass userId for admin enrollment
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.error || "Failed to enroll learner"
-        
-        // Check if user is already enrolled (409 Conflict)
-        if (response.status === 409) {
-          toast.error(`${selectedUser.name} is already enrolled in this course`)
-        } else {
-          toast.error(errorMessage)
-        }
-        throw new Error(errorMessage)
-      }
-
-      toast.success(`Enrolled ${selectedUser.name} in course`)
-      setEnrollDialogOpen(false)
-      setSelectedUser(null)
-      setSelectedCourse("")
-
-      // Invalidate learners and stats cache to trigger refetch
-      invalidateLearners()
-    } catch (err: any) {
-      console.error("Error enrolling learner:", err)
-      toast.error(err.message || "Failed to enroll learner")
-    } finally {
-      setEnrolling(false)
-    }
-  }
-
-  const getTotalEnrolled = () => {
-    // Use stats from API (same as dashboard) for total learners count
-    return stats?.totalLearners || 0
-  }
-
-  const getTotalCoursesEnrolled = () => {
-    return learners.reduce((sum, learner) => sum + learner.enrolledCourses.length, 0)
-  }
-
-  const getTotalCompleted = () => {
-    return learners.reduce((sum, learner) => sum + learner.completedCourses.length, 0)
-  }
+  const showSkeleton = (authLoading || !user || userType !== "admin") && !hasCachedData && learnersPending
+  const openAssignments = (targets: AssignmentLearner[]) => { setAssignmentTargets(targets); setAssignOpen(true) }
 
   // Show skeleton ONLY on true initial load (no cached data exists)
   // Once we have data, never show skeleton again (even during refetches)
@@ -193,8 +124,12 @@ export default function LearnersPage() {
         <div>
           <h1 className="text-3xl font-bold text-primary mb-2">Learner Management</h1>
           <p className="text-muted-foreground">
-            View and manage all learners enrolled in courses
+            View and manage all teachers and their course assignments
           </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>Import CSV</Button>
+          <Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4 mr-2" />Add User</Button>
         </div>
       </div>
 
@@ -214,7 +149,7 @@ export default function LearnersPage() {
             ) : statsError ? (
               <p className="text-sm text-destructive">Error loading stats</p>
             ) : (
-              <p className="text-3xl font-bold">{getTotalEnrolled()}</p>
+              <p className="text-3xl font-bold">{stats?.totalLearners ?? 0}</p>
             )}
           </CardContent>
         </Card>
@@ -226,7 +161,7 @@ export default function LearnersPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{getTotalCoursesEnrolled()}</p>
+            {statsError ? <p className="text-sm text-destructive">Error loading stats</p> : <p className="text-3xl font-bold">{stats?.totalEnrollments ?? "..."}</p>}
           </CardContent>
         </Card>
         <Card>
@@ -237,7 +172,7 @@ export default function LearnersPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{getTotalCompleted()}</p>
+            {statsError ? <p className="text-sm text-destructive">Error loading stats</p> : <p className="text-3xl font-bold">{stats?.totalCompleted ?? "..."}</p>}
           </CardContent>
         </Card>
       </div>
@@ -247,6 +182,11 @@ export default function LearnersPage() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <CardTitle>All Learners</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              <Button variant="outline" disabled={!selectedIds.length} onClick={() => openAssignments(
+                allLearners.filter((learner) => selectedIds.includes(learner.id)).map((learner) => ({
+                  id: learner.id, name: learner.name, enrolledCourses: learner.enrolledCourses || [],
+                }))
+              )}>Assign Courses ({selectedIds.length})</Button>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -275,6 +215,10 @@ export default function LearnersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead><Checkbox aria-label="Select all visible learners" checked={filteredLearners.length > 0 && filteredLearners.every((learner) => selectedIds.includes(learner.id))}
+                    onCheckedChange={(checked) => setSelectedIds(checked === true
+                      ? Array.from(new Set([...selectedIds, ...filteredLearners.map((learner) => learner.id)]))
+                      : selectedIds.filter((id) => !filteredLearners.some((learner) => learner.id === id)))} /></TableHead>
                   <TableHead className="w-[35%] min-w-[200px]">Learner</TableHead>
                   <TableHead className="w-[35%] min-w-[180px]">Email</TableHead>
                   <TableHead className="w-[30%] min-w-[180px]">Actions</TableHead>
@@ -283,19 +227,21 @@ export default function LearnersPage() {
               <TableBody>
                 {learnersError ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-destructive">
+                    <TableCell colSpan={4} className="text-center py-8 text-destructive">
                       {learnersError.message || "Failed to load learners"}
                     </TableCell>
                   </TableRow>
                 ) : filteredLearners.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       No learners found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredLearners.map((learner) => (
                     <TableRow key={learner.id}>
+                      <TableCell><Checkbox aria-label={`Select ${learner.name}`} checked={selectedIds.includes(learner.id)}
+                        onCheckedChange={(checked) => setSelectedIds(checked === true ? [...selectedIds, learner.id] : selectedIds.filter((id) => id !== learner.id))} /></TableCell>
                       <TableCell className="w-[35%] min-w-[200px]">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10 flex-shrink-0">
@@ -323,11 +269,11 @@ export default function LearnersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEnrollClick(learner)}
+                            onClick={() => openAssignments([learner])}
                             className="whitespace-nowrap"
                           >
                             <Plus className="h-4 w-4 mr-1" />
-                            Enroll
+                            Assign Courses
                           </Button>
                         </div>
                       </TableCell>
@@ -340,59 +286,9 @@ export default function LearnersPage() {
         </CardContent>
       </Card>
 
-      {/* Enrollment Dialog */}
-      <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Enroll Learner in Course</DialogTitle>
-            <DialogDescription>
-              Select a course to enroll {selectedUser?.name} in.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Course</label>
-              {coursesPending ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              ) : (
-              <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a course" />
-                </SelectTrigger>
-                <SelectContent>
-                    {courses.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground">No courses available</div>
-                    ) : (
-                      courses.map((course) => (
-                    <SelectItem key={course.id} value={course.id.toString()}>
-                      {course.title}
-                    </SelectItem>
-                      ))
-                    )}
-                </SelectContent>
-              </Select>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEnrollDialogOpen(false)} disabled={enrolling}>
-              Cancel
-            </Button>
-            <Button onClick={handleEnrollConfirm} disabled={!selectedCourse || enrolling || coursesPending}>
-              {enrolling ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Enrolling...
-                </>
-              ) : (
-                "Enroll"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddUserDialog open={addOpen} onOpenChange={setAddOpen} />
+      <ImportUsersDialog open={importOpen} onOpenChange={setImportOpen} />
+      <AssignCoursesDialog open={assignOpen} onOpenChange={setAssignOpen} learners={assignmentTargets} />
         </>
       )}
     </div>

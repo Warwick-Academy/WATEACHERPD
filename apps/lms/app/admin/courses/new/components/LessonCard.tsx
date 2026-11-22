@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -29,6 +30,8 @@ import ResourceManager from "./ResourceManager"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 import type { Resource } from "./ResourceManager"
+import { LESSON_LEVELS, type LessonLevel } from "@/lib/lesson-levels"
+import LessonLevelBadges from "@/components/LessonLevelBadges"
 
 interface Lesson {
   id: string
@@ -44,6 +47,7 @@ interface Lesson {
     questions: any[]
   }
   estimatedDuration?: number
+  levels?: LessonLevel[]
 }
 
 interface LessonCardProps {
@@ -72,6 +76,7 @@ export default function LessonCard({
   courseId,
 }: LessonCardProps) {
   const [localLesson, setLocalLesson] = useState<Lesson>(lesson)
+  const levelId = useId()
 
   const updateLesson = (updates: Partial<Lesson>) => {
     const updated = { ...localLesson, ...updates }
@@ -109,7 +114,7 @@ export default function LessonCard({
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
           )}
-          <div className="flex-1 flex items-center gap-2">
+          <div className="flex-1 flex flex-wrap items-center gap-2 min-w-0">
             {localLesson.type === "video" ? (
               <Video className="w-4 h-4 text-muted-foreground" />
             ) : localLesson.type === "text" ? (
@@ -128,6 +133,7 @@ export default function LessonCard({
                 {localLesson.estimatedDuration} min
               </Badge>
             )}
+            <LessonLevelBadges levels={localLesson.levels} />
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={() => onDuplicate(localLesson)} title="Duplicate">
@@ -211,6 +217,26 @@ export default function LessonCard({
                 </RadioGroup>
               </div>
 
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Level</legend>
+                <div className="flex flex-wrap gap-4">
+                  {LESSON_LEVELS.map((level) => (
+                    <div key={level} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`${levelId}-${level}`}
+                        checked={localLesson.levels?.includes(level) ?? false}
+                        onCheckedChange={(checked) => updateLesson({
+                          levels: checked === true
+                            ? [...(localLesson.levels ?? []), level]
+                            : (localLesson.levels ?? []).filter((item) => item !== level),
+                        })}
+                      />
+                      <Label htmlFor={`${levelId}-${level}`}>{level.charAt(0).toUpperCase() + level.slice(1)}</Label>
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
+
               <div className="space-y-2">
                 <Label>Estimated Duration (minutes)</Label>
                 <Input
@@ -274,6 +300,7 @@ export default function LessonCard({
                   onChange={(quiz) => updateLesson({ quiz })}
                   lessonTitle={localLesson.title}
                   lessonContent={localLesson.content?.html || localLesson.content?.text || ""}
+                  lessonLevels={localLesson.levels}
                   minimumQuizScore={minimumQuizScore}
                   courseId={courseId}
                   lessonId={localLesson.id}

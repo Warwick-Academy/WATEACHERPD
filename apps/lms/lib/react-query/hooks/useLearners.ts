@@ -9,6 +9,13 @@ export interface Learner {
   user_type: string
   created_at: string
   enrolled_courses_count?: number
+  profileImage?: string
+  bio?: string
+  currency?: string
+  enrolledCourses?: number[]
+  completedCourses?: number[]
+  progress?: Record<number, number>
+  enrollments?: Array<{ course_id: number; status: string; progress: number | null; courses: { id: number; title: string } | null }>
 }
 
 interface LearnersResponse {

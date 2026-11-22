@@ -35,12 +35,7 @@ export function useRealtimeEnrollments(userId?: string) {
           queryClient.invalidateQueries({ queryKey: ["enrollments"] })
           // Also invalidate courses to update enrollment status
           queryClient.invalidateQueries({ queryKey: ["courses"] })
-          // Invalidate the specific course cache if course_id is available
-          if (payload.new && (payload.new as any).course_id) {
-            queryClient.invalidateQueries({ queryKey: ["course", (payload.new as any).course_id] })
-          } else if (payload.old && (payload.old as any).course_id) {
-            queryClient.invalidateQueries({ queryKey: ["course", (payload.old as any).course_id] })
-          }
+          queryClient.invalidateQueries({ queryKey: ["course"] })
         }
       )
       .subscribe()
@@ -372,6 +367,8 @@ export function useRealtimeAdminStats() {
         () => {
           queryClient.invalidateQueries({ queryKey: ["admin-stats"] })
           queryClient.invalidateQueries({ queryKey: ["learners"] }) // Also invalidate learners when enrollments change
+          queryClient.invalidateQueries({ queryKey: ["learner"] })
+          queryClient.invalidateQueries({ queryKey: ["learner-stats"] })
         }
       )
       .on(
@@ -383,9 +380,10 @@ export function useRealtimeAdminStats() {
         },
         (payload) => {
           // Only invalidate if it's a user profile change (user_type = 'user')
-          if (payload.new && (payload.new as any).user_type === "user") {
+          if ((payload.new && (payload.new as any).user_type === "user") || (payload.old && (payload.old as any).user_type === "user")) {
             queryClient.invalidateQueries({ queryKey: ["admin-stats"] })
             queryClient.invalidateQueries({ queryKey: ["learners"] })
+            queryClient.invalidateQueries({ queryKey: ["learner-stats"] })
           }
         }
       )

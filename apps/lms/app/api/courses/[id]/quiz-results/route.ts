@@ -106,7 +106,7 @@ export async function POST(
 
   logInfo("Enrollment check", { enrollment: !!enrollment, error: enrollmentError?.message })
 
-  if (!enrollment) {
+  if (!enrollment || enrollment.status === "cancelled") {
     return NextResponse.json(
       { error: "You must be enrolled in this course to submit quiz results" },
       { status: 403 }

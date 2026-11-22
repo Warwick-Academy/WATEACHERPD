@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
+import LessonLevelBadges from "@/components/LessonLevelBadges"
+import { getCourseLevels, type LessonLevel } from "@/lib/lesson-levels"
 
 interface Course {
   id: number
@@ -56,6 +58,7 @@ interface Course {
     id: number
     title: string
     type?: string
+    levels?: LessonLevel[]
     settings?: any
     resources?: Array<{
       title: string
@@ -544,6 +547,7 @@ export default function CoursePage() {
             <CardContent className="p-4 md:p-6">
               <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-primary">Course Overview</h2>
               <ReadMore text={course?.description || ""} maxLength={1000} className="mb-4 leading-relaxed" />
+              <LessonLevelBadges levels={getCourseLevels(course.lessons)} />
               <div className="flex flex-wrap items-center gap-2 md:gap-4 pt-4 border-t">
                 <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-muted-foreground">
                   <span>{course.lessons?.length || 0} lessons</span>
@@ -567,9 +571,10 @@ export default function CoursePage() {
                     <AccordionItem value={`item-${index}`} key={lesson.id || index} className="border-b">
                       <AccordionTrigger className="py-3 md:py-4">
                         <div className="flex items-start justify-between w-full text-left">
-                          <div className="flex items-start flex-1 min-w-0 pr-2">
+                          <div className="flex flex-wrap items-start gap-2 flex-1 min-w-0 pr-2">
                             <LessonIcon className="w-4 h-4 md:w-5 md:h-5 mr-2 text-primary flex-shrink-0 mt-0.5" />
                             <span className="font-medium text-sm md:text-base text-left break-words">{lesson.title}</span>
+                            <LessonLevelBadges levels={lesson.levels} />
                           </div>
                         </div>
                       </AccordionTrigger>

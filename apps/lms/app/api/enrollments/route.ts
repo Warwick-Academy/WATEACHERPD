@@ -3,6 +3,19 @@ import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 import { hasPassedCourseQuizzes } from "@/lib/quiz/course-eligibility"
 
+async function updateEnrollmentCount(client: ReturnType<typeof createServiceRoleClient>, courseId: number) {
+  const { count, error } = await client.from("enrollments")
+    .select("*", { count: "exact", head: true })
+    .eq("course_id", courseId)
+    .neq("status", "cancelled")
+  if (error || count === null) {
+    logError("Failed to count course enrollments", error ?? new Error("Missing enrollment count"), { component: "enrollments/route", courseId })
+    return
+  }
+  const { error: updateError } = await client.from("courses").update({ enrolled_students: count }).eq("id", courseId)
+  if (updateError) logError("Failed to update course enrollment count", updateError, { component: "enrollments/route", courseId })
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -43,6 +56,7 @@ export async function GET() {
         courses (*)
       `)
       .eq("user_id", user.id)
+      .neq("status", "cancelled")
 
     // If error with courses relation, try without it (might be RLS issue even with service client)
     if (error) {
@@ -56,6 +70,7 @@ export async function GET() {
         .from("enrollments")
         .select("*")
         .eq("user_id", user.id)
+        .neq("status", "cancelled")
       
       if (!enrollmentsError) {
         data = enrollmentsData
@@ -121,7 +136,8 @@ export async function POST(request: Request) {
 
   // Check if user is admin if userId is provided (admin enrolling another user)
   let targetUserId = user.id
-  if (userId && userId !== user.id) {
+  const adminAssignment = userId !== undefined
+  if (adminAssignment) {
     // Verify the requesting user is an admin using service role client to bypass RLS
     const { data: profile, error: profileError } = await serviceSupabase
       .from("profiles")
@@ -142,17 +158,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden: Only admins can enroll other users" }, { status: 403 })
     }
 
+    if (typeof userId !== "string" || !userId) {
+      return NextResponse.json({ error: "A valid userId is required" }, { status: 400 })
+    }
     targetUserId = userId
   }
 
-  if (!courseId) {
-    return NextResponse.json({ error: "courseId is required" }, { status: 400 })
+  if (!Number.isInteger(Number(courseId)) || Number(courseId) <= 0) {
+    return NextResponse.json({ error: "A valid courseId is required" }, { status: 400 })
+  }
+
+  if (adminAssignment) {
+    const [{ data: course, error: courseError }, { data: target, error: targetError }] = await Promise.all([
+      serviceSupabase.from("courses").select("id, is_published").eq("id", courseId).maybeSingle(),
+      serviceSupabase.from("profiles").select("id").eq("id", targetUserId).maybeSingle(),
+    ])
+    if (courseError || targetError) {
+      logError("Failed to validate assignment", courseError || targetError, { component: "enrollments/route", action: "POST" })
+      return NextResponse.json({ error: "Failed to validate assignment" }, { status: 500 })
+    }
+    if (!course?.is_published || !target) {
+      return NextResponse.json({ error: "Select an existing user and a published course" }, { status: 400 })
+    }
   }
 
   // Check if user is already enrolled in this course
   const { data: existingEnrollment, error: checkEnrollmentError } = await serviceSupabase
     .from("enrollments")
-    .select("id, status")
+    .select("id, status, completed_at")
     .eq("user_id", targetUserId)
     .eq("course_id", courseId)
     .maybeSingle()
@@ -168,14 +201,34 @@ export async function POST(request: Request) {
   }
 
   if (existingEnrollment) {
+    if (existingEnrollment.status === "cancelled" && adminAssignment) {
+      const { data: restored, error: restoreError } = await serviceSupabase
+        .from("enrollments")
+        .update({ status: existingEnrollment.completed_at ? "completed" : "active" })
+        .eq("id", existingEnrollment.id)
+        .eq("status", "cancelled")
+        .select()
+        .maybeSingle()
+      if (restoreError) {
+        logError("Failed to restore enrollment", restoreError, { component: "enrollments/route", action: "POST", courseId })
+        return NextResponse.json({ error: "Failed to restore enrollment" }, { status: 500 })
+      }
+      if (!restored) return NextResponse.json({ error: "Enrollment changed; refresh and try again" }, { status: 409 })
+      await updateEnrollmentCount(serviceSupabase, Number(courseId))
+      return NextResponse.json({ enrollment: restored })
+    }
+    if (existingEnrollment.status === "cancelled") {
+      return NextResponse.json({ error: "This assignment was cancelled. Contact an administrator." }, { status: 403 })
+    }
     return NextResponse.json({ 
       error: "User is already enrolled in this course",
+      code: "already_enrolled",
       enrollment: existingEnrollment 
     }, { status: 409 }) // 409 Conflict
   }
 
   // Check prerequisites before enrollment (skip for paid courses)
-  if (!bypassPrerequisites) {
+  if (!bypassPrerequisites && !adminAssignment) {
     const { data: prerequisitesData } = await serviceSupabase
       .from("course_prerequisites")
       .select(`
@@ -243,6 +296,9 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ error: "User is already enrolled in this course", code: "already_enrolled" }, { status: 409 })
+    }
     logError("Enrollments API: Error creating enrollment", error, {
       component: "enrollments/route",
       action: "POST",
@@ -252,21 +308,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Update enrolled_students count in courses table
-  // Recalculate the count to ensure accuracy
-  const { count: currentCount } = await serviceSupabase
-    .from("enrollments")
-    .select("*", { count: "exact", head: true })
-    .eq("course_id", courseId)
-
-  // Update the courses table with the new count
-  await serviceSupabase
-    .from("courses")
-    .update({ enrolled_students: currentCount || 0 })
-    .eq("id", courseId)
+  await updateEnrollmentCount(serviceSupabase, Number(courseId))
 
   // Send enrollment email notification (non-blocking)
-  if (data?.id) {
+  if (data?.id && process.env.SENDGRID_API_KEY) {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       const notificationUrl = new URL("/api/send-email-notification", baseUrl).toString()
@@ -306,26 +351,39 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { courseId, status } = await request.json()
+  const { courseId, status, userId } = await request.json()
 
   if (!courseId) {
     return NextResponse.json({ error: "courseId is required" }, { status: 400 })
   }
 
-  if (!status) {
-    return NextResponse.json({ error: "status is required" }, { status: 400 })
+  if (!["active", "completed", "cancelled"].includes(status)) {
+    return NextResponse.json({ error: "A valid status is required" }, { status: 400 })
   }
 
   // Use service role client to bypass RLS
   const serviceSupabase = createServiceRoleClient()
+  let targetUserId = user.id
+  if (userId !== undefined) {
+    if (typeof userId !== "string" || !userId || status !== "cancelled") {
+      return NextResponse.json({ error: "Admin updates must specify a user and cancelled status" }, { status: 400 })
+    }
+    const { data: profile, error: profileError } = await serviceSupabase.from("profiles").select("user_type").eq("id", user.id).single()
+    if (profileError) {
+      logError("Failed to verify admin status", profileError, { component: "enrollments/route", action: "PATCH" })
+      return NextResponse.json({ error: "Failed to verify admin status" }, { status: 500 })
+    }
+    if (profile?.user_type !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    targetUserId = userId
+  }
 
-  logInfo("Updating enrollment", { userId: user.id, courseId, status })
+  logInfo("Updating enrollment", { userId: targetUserId, courseId, status })
 
   // First check if enrollment exists
   const { data: existingEnrollment, error: checkError } = await serviceSupabase
     .from("enrollments")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", targetUserId)
     .eq("course_id", courseId)
     .single()
 
@@ -347,6 +405,10 @@ export async function PATCH(request: Request) {
       courseId,
     })
     return NextResponse.json({ error: "Enrollment not found" }, { status: 404 })
+  }
+
+  if (existingEnrollment.status === "cancelled" && userId === undefined) {
+    return NextResponse.json({ error: "This assignment was cancelled. Contact an administrator." }, { status: 403 })
   }
 
   if (status === "completed" && existingEnrollment.status !== "completed") {
@@ -374,17 +436,24 @@ export async function PATCH(request: Request) {
     updateData.completed_at = new Date().toISOString()
     // Also update progress to 100% if completing
     updateData.progress = 100
-  } else {
+  } else if (status !== "cancelled") {
     updateData.completed_at = null
   }
 
-  const { data, error } = await serviceSupabase
+  const wasCancelled = existingEnrollment.status === "cancelled"
+  let updateQuery = serviceSupabase
     .from("enrollments")
     .update(updateData)
-    .eq("user_id", user.id)
+    .eq("user_id", targetUserId)
     .eq("course_id", courseId)
+  if (userId === undefined) updateQuery = updateQuery.neq("status", "cancelled")
+  const { data, error } = await updateQuery
     .select()
     .single()
+
+  if (!error && status === "cancelled" && !wasCancelled) {
+    await updateEnrollmentCount(serviceSupabase, Number(courseId))
+  }
 
   // Send completion email notification if status changed to completed (non-blocking)
   if (status === "completed" && data?.id && existingEnrollment?.status !== "completed") {

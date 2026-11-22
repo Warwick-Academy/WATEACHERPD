@@ -25,7 +25,7 @@ import TableSkeleton from "@/components/TableSkeleton"
 
 export default function TeamManagement() {
   const { user, loading: authLoading, userType } = useClientAuthState()
-  const [newMember, setNewMember] = useState<{ name: string; email: string; password: string; role: "admin" | "instructor" }>({
+  const [newMember, setNewMember] = useState<{ name: string; email: string; password: string; role: "admin" }>({
     name: "",
     email: "",
     password: "",
@@ -80,7 +80,7 @@ export default function TeamManagement() {
         password: newMember.password,
         userType: newMember.role,
       })
-      setNewMember({ name: "", email: "", password: "", role: "admin" as "admin" | "instructor" })
+      setNewMember({ name: "", email: "", password: "", role: "admin" })
       toast.success("Team member added successfully")
     } catch (err: any) {
       console.error("Error adding team member:", err)
@@ -156,7 +156,7 @@ export default function TeamManagement() {
               <Label htmlFor="role">Role</Label>
               <Select
                 value={newMember.role}
-                onValueChange={(value: "admin" | "instructor") => setNewMember({ ...newMember, role: value })}
+                onValueChange={() => setNewMember({ ...newMember, role: "admin" })}
                 disabled={createMemberMutation.isPending}
               >
                 <SelectTrigger id="role">
@@ -164,7 +164,6 @@ export default function TeamManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="instructor">Instructor</SelectItem>
                 </SelectContent>
               </Select>
             </div>

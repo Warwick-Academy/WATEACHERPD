@@ -296,6 +296,7 @@ function NewCourseContent() {
                       passingScore: null,
                     },
                     estimatedDuration: estimatedDuration,
+                    levels: lesson.levels ?? [],
                   }
                   
                   console.log("Transformed lesson:", {

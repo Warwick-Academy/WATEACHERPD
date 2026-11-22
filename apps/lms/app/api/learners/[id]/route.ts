@@ -66,8 +66,7 @@ export async function GET(
     return NextResponse.json({ error: "Failed to verify admin status" }, { status: 500 })
   }
 
-  // Allow both admin and instructor access
-  if (profile?.user_type !== "admin" && profile?.user_type !== "instructor") {
+  if (profile?.user_type !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -81,7 +80,8 @@ export async function GET(
       enrollments (
         course_id,
         status,
-        progress
+        progress,
+        courses (id, title)
       )
     `)
     .eq("id", id)
@@ -104,8 +104,9 @@ export async function GET(
     profileImage: learner.profile_image,
     bio: learner.bio,
     currency: learner.currency,
-    enrolledCourses: learner.enrollments?.map((e: any) => e.course_id) || [],
+    enrolledCourses: learner.enrollments?.filter((e: any) => e.status !== "cancelled").map((e: any) => e.course_id) || [],
     completedCourses: learner.enrollments?.filter((e: any) => e.status === "completed").map((e: any) => e.course_id) || [],
+    enrollments: learner.enrollments || [],
     progress: learner.enrollments?.reduce((acc: any, e: any) => {
       acc[e.course_id] = e.progress || 0
       return acc

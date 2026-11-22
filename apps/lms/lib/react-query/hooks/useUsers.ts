@@ -64,7 +64,7 @@ export function useCreateTeamMember() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async (data: { name: string; email: string; password: string; userType: "admin" | "instructor" }) => {
+    mutationFn: async (data: { name: string; email: string; password: string; userType: "admin" }) => {
       const response = await fetch("/api/users", {
         method: "POST",
         headers: {

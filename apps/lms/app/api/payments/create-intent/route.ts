@@ -30,6 +30,20 @@ export async function POST(request: Request) {
   // Use service role client to bypass RLS policies that cause infinite recursion
   const serviceSupabase = createServiceRoleClient()
 
+  const { data: existingEnrollment, error: enrollmentError } = await serviceSupabase
+    .from("enrollments")
+    .select("status")
+    .eq("user_id", user.id)
+    .eq("course_id", Number(courseId))
+    .maybeSingle()
+  if (enrollmentError) {
+    console.error("Failed to check enrollment before payment:", enrollmentError)
+    return NextResponse.json({ error: "Could not verify enrollment before payment" }, { status: 500 })
+  }
+  if (existingEnrollment?.status === "cancelled") {
+    return NextResponse.json({ error: "This assignment was cancelled. Contact an administrator." }, { status: 403 })
+  }
+
   // Fetch course with price and title
   const { data: course, error: courseError } = await serviceSupabase
     .from("courses")

@@ -16,6 +16,7 @@ import QuestionEditor, { createQuestion } from "./question-types/QuestionEditor"
 import QuestionTypeSelector from "./question-types/QuestionTypeSelector"
 import QuizSettings from "./QuizSettings"
 import GenerateQuizDialog from "./GenerateQuizDialog"
+import type { LessonLevel } from "@/lib/lesson-levels"
 
 interface QuizBuilderProps {
   quiz: {
@@ -28,9 +29,10 @@ interface QuizBuilderProps {
   lessonId?: string | number
   lessonTitle: string
   lessonContent: string
+  lessonLevels?: LessonLevel[]
 }
 
-export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, courseId, lessonId, lessonTitle, lessonContent }: QuizBuilderProps) {
+export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, courseId, lessonId, lessonTitle, lessonContent, lessonLevels }: QuizBuilderProps) {
   const [previewMode, setPreviewMode] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, any>>({})
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set())
@@ -156,6 +158,7 @@ export default function QuizBuilder({ quiz, onChange, minimumQuizScore = 50, cou
       <GenerateQuizDialog
         lessonTitle={lessonTitle}
         lessonContent={lessonContent}
+        lessonLevels={lessonLevels}
         onAdd={(generated, replace) => onChange({
           ...quiz,
           enabled: true,

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,8 @@ import { formatCurrency } from "@/lib/utils/currency"
 import AdminLearnerDetailSkeleton from "@/components/AdminLearnerDetailSkeleton"
 import { useLearner, useRealtimeAdminStats } from "@/lib/react-query/hooks"
 import { usePageSkeleton } from "@/lib/react-query/hooks/useSkeleton"
+import AssignCoursesDialog from "@/components/admin/AssignCoursesDialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 interface Learner {
   id: string
@@ -38,6 +41,7 @@ interface Learner {
   completedCourses: number[]
   progress: { [courseId: number]: number }
   created_at?: string
+  enrollments: Array<{ course_id: number; status: string; progress: number | null; courses: { id: number; title: string } | null }>
 }
 
 interface Course {
@@ -72,6 +76,10 @@ function LearnerDetailsPage() {
   const learnerId = params.id as string
   const [courses, setCourses] = useState<Course[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [unassignId, setUnassignId] = useState<number | null>(null)
+  const [unassigning, setUnassigning] = useState(false)
+  const queryClient = useQueryClient()
 
   // Use React Query hooks for data fetching with caching
   const { data: learnerData, isPending: learnerPending, error: learnerError } = useLearner(learnerId)
@@ -94,8 +102,34 @@ function LearnerDetailsPage() {
       completedCourses: l.completedCourses || [],
       progress: l.progress || {},
       created_at: l.created_at,
+      enrollments: l.enrollments || [],
     }
   }, [learnerData])
+
+  const unassign = async () => {
+    if (unassignId === null) return
+    setUnassigning(true)
+    try {
+      const response = await fetch("/api/enrollments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: learnerId, courseId: unassignId, status: "cancelled" }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to unassign course")
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["learner", learnerId] }),
+        queryClient.invalidateQueries({ queryKey: ["learners"] }),
+        queryClient.invalidateQueries({ queryKey: ["learner-stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["courses"] }),
+      ])
+      toast.success("Course unassigned; progress history was retained.")
+      setUnassignId(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to unassign course")
+    } finally { setUnassigning(false) }
+  }
 
   useEffect(() => {
     if (!authLoading && (!user || userType !== "admin")) {
@@ -105,21 +139,21 @@ function LearnerDetailsPage() {
 
   useEffect(() => {
     const fetchCoursesAndProgress = async () => {
-      if (!learner || learner.enrolledCourses.length === 0) {
+      if (!learner || learner.enrollments.length === 0) {
         setCourses([])
         return
       }
 
       try {
-        const courseIds = learner.enrolledCourses.join(",")
-        const coursesResponse = await fetch(`/api/courses?ids=${courseIds}`)
+        const courseIds = learner.enrollments.map((enrollment) => enrollment.course_id).join(",")
+        const coursesResponse = await fetch(`/api/courses?all=true&ids=${courseIds}`)
         if (!coursesResponse.ok) {
           console.warn("Failed to fetch courses, showing basic course info")
           // Don't throw error, just show basic course info without progress
-          setCourses(learner.enrolledCourses.map(id => ({
-            id,
-            title: `Course ${id}`,
-            calculatedProgress: 0
+          setCourses(learner.enrollments.map(enrollment => ({
+            id: enrollment.course_id,
+            title: enrollment.courses?.title || `Course ${enrollment.course_id}`,
+            calculatedProgress: enrollment.progress ?? 0
           })))
           return
         }
@@ -185,10 +219,10 @@ function LearnerDetailsPage() {
       } catch (err: any) {
         console.error("Error fetching courses data:", err)
         // Set basic course data as fallback
-        setCourses(learner.enrolledCourses.map(id => ({
-          id,
-          title: `Course ${id}`,
-          calculatedProgress: 0
+        setCourses(learner.enrollments.map(enrollment => ({
+          id: enrollment.course_id,
+          title: enrollment.courses?.title || `Course ${enrollment.course_id}`,
+          calculatedProgress: enrollment.progress ?? 0
         })))
       }
     }
@@ -359,32 +393,31 @@ function LearnerDetailsPage() {
 
         <TabsContent value="enrollments" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Enrolled Courses</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle>Assigned Courses</CardTitle>
+              <Button onClick={() => setAssignOpen(true)}>Assign Courses</Button>
             </CardHeader>
             <CardContent>
-              {enrolledCourses.length > 0 ? (
+              {learner.enrollments.length > 0 ? (
                 <div className="space-y-4">
-                  {enrolledCourses.map((course) => {
-                    const isCompleted = completedCourses.some(c => c.id === course.id)
+                  {learner.enrollments.map((enrollment) => {
+                    const title = enrollment.courses?.title || `Course ${enrollment.course_id}`
                     return (
-                      <div key={course.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={enrollment.course_id} className="flex flex-wrap items-center justify-between gap-3 p-4 border rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{course.title}</h3>
-                            {isCompleted && (
-                              <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                                Completed
-                              </Badge>
-                            )}
+                            <h3 className="font-semibold">{title}</h3>
+                            <Badge variant="secondary">{enrollment.status}</Badge>
                           </div>
+                          <p className="text-sm text-muted-foreground">Progress: {getCourse(enrollment.course_id)?.calculatedProgress ?? enrollment.progress ?? 0}%</p>
                         </div>
                         <div className="flex items-center gap-4">
-                          <Link href={`/admin/courses/preview/${createCourseSlug(course.title, course.id)}`}>
+                          <Link href={`/admin/courses/preview/${createCourseSlug(title, enrollment.course_id)}`}>
                             <Button variant="outline" size="sm">
                               View Course
                             </Button>
                           </Link>
+                          {enrollment.status !== "cancelled" && <Button variant="outline" size="sm" onClick={() => setUnassignId(enrollment.course_id)}>Unassign</Button>}
                         </div>
                       </div>
                     )
@@ -559,6 +592,13 @@ function LearnerDetailsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <AssignCoursesDialog open={assignOpen} onOpenChange={setAssignOpen} learners={[{ id: learner.id, name: learner.name, enrolledCourses: learner.enrolledCourses }]} />
+      <AlertDialog open={unassignId !== null} onOpenChange={(open) => { if (!open && !unassigning) setUnassignId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Unassign course?</AlertDialogTitle><AlertDialogDescription>This removes the assignment while retaining progress history.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={unassigning}>Cancel</AlertDialogCancel><AlertDialogAction disabled={unassigning} onClick={(event) => { event.preventDefault(); void unassign() }}>{unassigning ? "Unassigning..." : "Unassign"}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

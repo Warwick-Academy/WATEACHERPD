@@ -39,10 +39,9 @@ export function useCourses(options?: { recommended?: boolean; all?: boolean }) {
 
 // Fetch single course
 export function useCourse(id: string | number | null) {
-  return useAppQuery<{ course: Course }>(
-    'course',
-    ["course", id],
-    async () => {
+  return useQuery<{ course: Course & { lessons: NonNullable<Course["lessons"]> } }>({
+    queryKey: ["course", id],
+    queryFn: async () => {
       if (!id) throw new Error("Course ID is required")
       const response = await fetch(`/api/courses/${id}`)
       if (!response.ok) {
@@ -51,8 +50,10 @@ export function useCourse(id: string | number | null) {
       }
       return response.json()
     },
-    { enabled: !!id }
-  )
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: "always",
+  })
 }
 
 // Invalidate courses cache

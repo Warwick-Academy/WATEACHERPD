@@ -50,7 +50,7 @@ export async function GET(
       .eq("course_id", lesson.course_id)
       .single()
 
-    if (!enrollment) {
+    if (!enrollment || enrollment.status === "cancelled") {
       return NextResponse.json(
         { error: "You must be enrolled in this course to access lessons" },
         { status: 403 }

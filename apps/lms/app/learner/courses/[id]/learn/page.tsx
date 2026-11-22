@@ -14,7 +14,7 @@ import ResourcesPanel from "./components/ResourcesPanel"
 import TextContentWithTracking from "./components/TextContentWithTracking"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useCourse, useEnrollments, useProgress, useQuizResults, useRealtimeProgress, useRealtimeQuizResults, useSaveProgress, useEnrollCourse } from "@/lib/react-query/hooks"
+import { useCourse, useEnrollments, useProgress, useQuizResults, useRealtimeProgress, useRealtimeQuizResults, useRealtimeEnrollments, useSaveProgress, useEnrollCourse } from "@/lib/react-query/hooks"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -23,6 +23,8 @@ import { useCourseProgress } from "./hooks/useCourseProgress"
 import { logError, logInfo, logWarning, formatErrorMessage, handleApiError } from "./utils/errorHandler"
 import ErrorState from "@/components/ErrorState"
 import { getPassingScore } from "@/lib/quiz/passing-score"
+import LessonLevelBadges from "@/components/LessonLevelBadges"
+import type { LessonLevel } from "@/lib/lesson-levels"
 
 interface Course {
   id: number
@@ -31,6 +33,7 @@ interface Course {
     id: number
     title: string
     type?: string
+    levels?: LessonLevel[]
     settings?: any
     resources?: Array<any>
     quiz_questions?: Array<any>
@@ -50,6 +53,7 @@ export default function CourseLearningPage() {
   const id = extractIdFromSlug(slugOrId) // Extract actual ID from slug if present
   const courseId = parseInt(id) // Parse course ID for use throughout component
   const { user, loading: authLoading, userType } = useClientAuthState()
+  useRealtimeEnrollments(user?.id)
   const lessonIndexParam = searchParams.get("lessonIndex")
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0)
   const [activeTab, setActiveTab] = useState("video")
@@ -64,8 +68,8 @@ export default function CourseLearningPage() {
   const showingQuizResultsRef = useRef<{ [lessonId: number]: boolean }>({}) // Track if quiz results are showing for a lesson
 
   // Use React Query hooks for data fetching
-  const { data: courseData, isPending: coursePending, error: courseError } = useCourse(id)
-  const { data: enrollmentsData, isPending: enrollmentsPending } = useEnrollments()
+  const { data: courseData, isPending: coursePending, isFetching: courseFetching, error: courseError } = useCourse(id)
+  const { data: enrollmentsData, isPending: enrollmentsPending, isFetching: enrollmentsFetching, error: enrollmentsError } = useEnrollments()
   const { data: progressData } = useProgress(id)
   const { data: quizResultsData } = useQuizResults(id)
   const saveProgressMutation = useSaveProgress()
@@ -317,7 +321,7 @@ export default function CourseLearningPage() {
   // Check enrollment status
   useEffect(() => {
     // Don't check enrollment until data is loaded
-    if (enrollmentsPending || !enrollmentsData?.enrollments) return
+    if (enrollmentsPending || enrollmentsFetching || enrollmentsError || !enrollmentsData?.enrollments || !course) return
 
     const enrollment = enrollmentsData.enrollments.find((e: any) => e.course_id === courseId)
 
@@ -325,7 +329,7 @@ export default function CourseLearningPage() {
       // User is not enrolled and not processing payment success - redirect to course page
       router.push(`/learner/courses/${createCourseSlug(course.title, courseId)}`)
     }
-  }, [id, enrollmentsData, enrollmentsPending, course, router])
+  }, [id, enrollmentsData, enrollmentsPending, enrollmentsFetching, enrollmentsError, course, router])
 
   // Save progress to API (debounced)
   const saveProgress = async (
@@ -815,7 +819,7 @@ export default function CourseLearningPage() {
   }
 
   const handlePreviousLesson = () => {
-    if (currentLessonIndex > 0) {
+    if (course && currentLessonIndex > 0) {
       const prevIndex = currentLessonIndex - 1
       // Check if can access previous lesson
       if (!canAccessLesson(prevIndex)) {
@@ -829,20 +833,22 @@ export default function CourseLearningPage() {
     }
   }
 
-  // Show error if course not found (only if no cached data exists)
-  if (courseError && !course) {
+  if (courseError || enrollmentsError) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background p-4">
         <ErrorState
           title="Failed to Load Course"
-          message={formatErrorMessage(courseError, "Unable to load the course. Please try again.")}
+          message={formatErrorMessage(courseError || enrollmentsError, "Unable to verify course access. Please try again.")}
           onRetry={() => {
             queryClient.refetchQueries({ queryKey: ["course", id] })
+            queryClient.refetchQueries({ queryKey: ["enrollments"] })
           }}
         />
       </div>
     )
   }
+
+  if (authLoading || !user || courseFetching || enrollmentsFetching || enrollmentsPending || !enrollmentForStatus) return null
 
   // Render with cached data immediately - don't wait for pending state
   if (!course && authLoading) {
@@ -906,6 +912,12 @@ export default function CourseLearningPage() {
               <List className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
+          {currentLesson.levels?.length ? (
+            <div className="max-w-[1800px] mx-auto mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">{currentLesson.title}</span>
+              <LessonLevelBadges levels={currentLesson.levels} />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1251,6 +1263,7 @@ export default function CourseLearningPage() {
                             <span className={`text-left break-words ${isCurrent ? "font-semibold" : ""}`}>
                               {index + 1}. {lesson.title}
                             </span>
+                            <div><LessonLevelBadges levels={lesson.levels} /></div>
                         </div>
                       </div>
                     </button>
@@ -1322,7 +1335,10 @@ export default function CourseLearningPage() {
                           ) : (
                             <LessonIcon className="w-4 h-4 mr-2 text-primary flex-shrink-0" />
                           )}
-                          <span className="text-sm font-medium truncate flex-1">{lesson.title}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium block truncate">{lesson.title}</span>
+                            <LessonLevelBadges levels={lesson.levels} />
+                          </div>
                         </div>
                       </Button>
                     )

@@ -75,7 +75,7 @@ export async function GET(request: Request) {
       .from("courses")
       .select(`
         *,
-        lessons (id, video_url, text_content, estimated_duration)
+        lessons (id, estimated_duration, levels)
       `)
 
     // Only filter by is_published if not fetching all courses
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         .from("courses")
         .select(`
           *,
-          lessons (id, content)
+          lessons (id, levels)
         `)
 
       // Only filter by is_published if not fetching all courses
@@ -166,6 +166,7 @@ export async function GET(request: Request) {
           .from("enrollments")
           .select("course_id")
           .in("course_id", courseIds)
+          .neq("status", "cancelled")
 
         if (!enrollmentsError && enrollmentsData) {
           // Count enrollments per course

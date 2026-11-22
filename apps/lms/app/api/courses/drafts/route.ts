@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 import { transformVideoUrls } from "@/lib/aws/s3"
+import { isLessonLevelArray } from "@/lib/lesson-levels"
 
 // Save or update a course draft
 export async function POST(request: Request) {
@@ -46,6 +47,9 @@ export async function POST(request: Request) {
     }
 
     for (const lesson of courseData.lessons || []) {
+      if (lesson.levels !== undefined && !isLessonLevelArray(lesson.levels)) {
+        return NextResponse.json({ error: "Lesson levels must contain only beginner, intermediate, or advanced" }, { status: 400 })
+      }
       const passingScore = lesson.quiz?.passingScore
       if (passingScore != null && (!Number.isInteger(passingScore) || passingScore < 0 || passingScore > 100)) {
         return NextResponse.json({ error: "Quiz passing score must be a whole number from 0 to 100" }, { status: 400 })
@@ -277,6 +281,7 @@ export async function POST(request: Request) {
           video_url: videoUrl, // Video URL in dedicated column
           text_content: textContent, // Text/HTML content in dedicated column
           estimated_duration: estimatedDuration, // Duration in dedicated column
+          ...(lesson.levels !== undefined ? { levels: lesson.levels } : {}),
           content: null, // No longer using content JSONB - set to null
           order_index: index,
           is_required: settings.isRequired !== undefined ? settings.isRequired : true,
@@ -319,6 +324,7 @@ export async function POST(request: Request) {
               lessonId: id,
               courseId: result.id,
             })
+            return NextResponse.json({ error: "Failed to save lesson" }, { status: 500 })
           }
         }
         logInfo(`Successfully updated ${lessonsToUpdate.length} lessons`, { courseId: result.id })
@@ -338,6 +344,7 @@ export async function POST(request: Request) {
             action: "POST",
             courseId: result.id,
           })
+          return NextResponse.json({ error: "Failed to save lessons" }, { status: 500 })
         } else {
           insertedLessonIds = (insertedLessons || []).map((l: any) => l.id)
           logInfo(`Successfully inserted ${insertedLessonIds.length} new lessons`, { courseId: result.id })
@@ -1420,6 +1427,7 @@ export async function GET(request: Request) {
           settings: settings,
           quiz: quiz,
           estimatedDuration: estimatedDuration,
+          levels: lesson.levels ?? [],
         }
       })
     } else {

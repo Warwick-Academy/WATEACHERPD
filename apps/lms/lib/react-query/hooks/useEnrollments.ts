@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useAppQuery, useAppMutation } from "./useAppCache"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAppMutation } from "./useAppCache"
 
 export interface Enrollment {
   id: string
@@ -18,18 +18,19 @@ interface EnrollmentsResponse {
 
 // Fetch user enrollments
 export function useEnrollments() {
-  return useAppQuery<EnrollmentsResponse>(
-    'enrollments',
-    ["enrollments"],
-    async () => {
+  return useQuery<EnrollmentsResponse>({
+    queryKey: ["enrollments"],
+    queryFn: async () => {
       const response = await fetch("/api/enrollments")
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || "Failed to fetch enrollments")
       }
       return response.json()
-    }
-  )
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+  })
 }
 
 // Enroll in a course with optimistic updates
@@ -52,7 +53,7 @@ export function useEnrollCourse() {
       return response.json()
     },
     {
-      invalidateQueries: [["enrollments"], ["courses"]],
+      invalidateQueries: [["enrollments"], ["courses"], ["course"]],
       optimisticUpdate: {
         queryKey: ["enrollments"],
         updater: (oldData: EnrollmentsResponse | undefined, variables: { courseId: number }) => {
