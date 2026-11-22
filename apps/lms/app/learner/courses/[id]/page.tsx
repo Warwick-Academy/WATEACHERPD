@@ -89,8 +89,6 @@ export default function CoursePage() {
   // ALL HOOKS MUST BE CALLED AT THE TOP, BEFORE ANY CONDITIONAL LOGIC
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
   const [isEnrolling, setIsEnrolling] = useState(false)
-  const [isEnrolled, setIsEnrolled] = useState(false)
-  const [isCompleted, setIsCompleted] = useState(false)
   const [prerequisitesError, setPrerequisitesError] = useState<{
     show: boolean
     missingPrerequisites: Array<{ id: number; title: string; status: string }>
@@ -101,7 +99,7 @@ export default function CoursePage() {
 
   // Use React Query hooks for data fetching
   const { data: courseData, isPending: coursePending, error: courseError } = useCourse(id)
-  const { data: enrollmentsData } = useEnrollments()
+  const { data: enrollmentsData, error: enrollmentsError, isFetching: enrollmentsFetching, refetch: refetchEnrollments } = useEnrollments()
   const { data: settingsData } = useSettings()
   const { data: profileData } = useProfile()
   const enrollCourseMutation = useEnrollCourse()
@@ -122,23 +120,11 @@ export default function CoursePage() {
   // This hook MUST be called before any early returns to maintain Rules of Hooks
   const coursePriceInfo = useCoursePrice(coursePrice)
 
-  // ALL LOGIC THAT DEPENDS ON HOOKS GOES HERE, BEFORE ANY EARLY RETURNS
-
-  // Check enrollment status from enrollments data
-  useEffect(() => {
-    if (!id || !enrollmentsData?.enrollments) return
-
-    const courseId = parseInt(id)
-    const enrollment = enrollmentsData.enrollments.find((e: any) => e.course_id === courseId)
-
-    if (enrollment) {
-      setIsEnrolled(true)
-      setIsCompleted(enrollment.status === "completed")
-    } else {
-      setIsEnrolled(false)
-      setIsCompleted(false)
-    }
-  }, [id, enrollmentsData])
+  const enrollment = enrollmentsData?.enrollments.find((entry) => entry.course_id === Number(id))
+  const isEnrolled = !!enrollment
+  const isCompleted = enrollment?.status === "completed"
+  const enrollmentStatusError = !enrollmentsData && !!enrollmentsError
+  const enrollmentStatusPending = !enrollmentsData && !enrollmentStatusError
 
   // Handle payment status messages from redirects
   useEffect(() => {
@@ -260,28 +246,12 @@ export default function CoursePage() {
   const enrollmentMode = course?.settings?.enrollment?.enrollmentMode || "free"
 
   const getAccessDetails = () => {
-    if (!coursePriceInfo) {
-      // Show platform currency price while loading conversion
-      const platformPrice = coursePrice
-      const platformCurrency = platformSettings?.default_currency || "USD"
-      if (platformPrice > 0) {
-        // Show properly formatted currency while loading
-        return {
-          price: formatCurrency(platformPrice, platformCurrency),
-          buttonText: "Loading...",
-          access: "Loading...",
-        }
-      }
-      return {
-        price: "Free",
-        buttonText: "Loading...",
-        access: "Loading...",
-      }
-    }
+    const paidPrice = coursePriceInfo?.formattedDisplayPrice ??
+      formatCurrency(coursePrice, platformSettings?.default_currency || "USD")
 
     if (isCompleted) {
       return {
-        price: enrollmentMode === "free" ? "Free" : coursePriceInfo.formattedDisplayPrice,
+        price: enrollmentMode === "free" ? "Free" : paidPrice,
         buttonText: "View Summary",
         access: "Full access for 3 months",
       }
@@ -289,7 +259,7 @@ export default function CoursePage() {
 
     if (isEnrolled) {
       return {
-        price: enrollmentMode === "free" ? "Free" : coursePriceInfo.formattedDisplayPrice,
+        price: enrollmentMode === "free" ? "Free" : paidPrice,
         buttonText: "Continue",
         access: "Full access for 3 months",
       }
@@ -304,7 +274,7 @@ export default function CoursePage() {
         }
       case "buy":
         return {
-          price: coursePriceInfo.formattedDisplayPrice,
+          price: paidPrice,
           buttonText: "Buy",
           access: "Full access for 3 months",
         }
@@ -318,8 +288,10 @@ export default function CoursePage() {
   }
 
   const { price, buttonText, access } = getAccessDetails()
+  const actionText = enrollmentStatusError ? "Retry enrollment status" : enrollmentStatusPending ? "Loading..." : buttonText
 
   const handleEnrollOrStart = async () => {
+    if (!enrollmentsData) return
     if (isCompleted) {
       // Course is completed, go to summary page
       router.push(`/learner/courses/${createCourseSlug(course?.title || "", Number.parseInt(id))}/learn/summary`)
@@ -478,11 +450,12 @@ export default function CoursePage() {
             </div>
             <Button
               className="w-full mb-4 bg-primary text-primary-foreground hover:bg-primary/90 h-11 md:h-10"
-              onClick={handleEnrollOrStart}
-              disabled={isEnrolling}
+              onClick={enrollmentStatusError ? () => { void refetchEnrollments() } : handleEnrollOrStart}
+              disabled={isEnrolling || enrollmentStatusPending || (enrollmentStatusError && enrollmentsFetching)}
             >
-              {isEnrolling ? "Processing..." : buttonText}
+              {isEnrolling ? "Processing..." : actionText}
             </Button>
+            {enrollmentStatusError && <p className="text-sm text-destructive mb-4">Unable to load enrollment status.</p>}
             {enrollmentMode !== "free" && (
               <p className="text-left lg:text-center text-xs text-muted-foreground mb-4">30-Day Money-Back Guarantee</p>
             )}
@@ -594,7 +567,7 @@ export default function CoursePage() {
                           )}
 
                           {/* Resources */}
-                          {lesson.resources?.map((resource, rIndex) => (
+                          {lesson.resources?.map((resource: { type: string; title: string }, rIndex: number) => (
                             <div key={rIndex} className="flex items-center justify-between py-2 pl-6 md:pl-7">
                               <div className="flex items-center min-w-0 flex-1">
                                 {resource.type === "document" ? (
@@ -763,11 +736,12 @@ export default function CoursePage() {
               </div>
               <Button
                 className="w-full mb-4 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleEnrollOrStart}
-                disabled={isEnrolling}
+                onClick={enrollmentStatusError ? () => { void refetchEnrollments() } : handleEnrollOrStart}
+                disabled={isEnrolling || enrollmentStatusPending || (enrollmentStatusError && enrollmentsFetching)}
               >
-                {isEnrolling ? "Processing..." : buttonText}
+                {isEnrolling ? "Processing..." : actionText}
               </Button>
+              {enrollmentStatusError && <p className="text-sm text-destructive mb-4">Unable to load enrollment status.</p>}
               {enrollmentMode !== "free" && (
                 <p className="text-center text-xs text-muted-foreground mb-4">30-Day Money-Back Guarantee</p>
               )}

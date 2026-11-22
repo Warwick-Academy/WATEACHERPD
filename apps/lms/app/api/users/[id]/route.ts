@@ -3,8 +3,9 @@ import { NextResponse } from "next/server"
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -38,7 +39,7 @@ export async function PUT(
   const { data: updatedProfile, error: profileError } = await supabase
     .from("profiles")
     .update(updateData)
-    .eq("id", params.id)
+    .eq("id", id)
     .select()
     .single()
 
@@ -48,7 +49,7 @@ export async function PUT(
 
   // Update email in auth if provided
   if (email) {
-    const { error: authError } = await supabase.auth.admin.updateUserById(params.id, {
+    const { error: authError } = await supabase.auth.admin.updateUserById(id, {
       email,
     })
 
@@ -62,8 +63,9 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -83,7 +85,7 @@ export async function DELETE(
   }
 
   // Prevent deleting yourself
-  if (params.id === user.id) {
+  if (id === user.id) {
     return NextResponse.json(
       { error: "You cannot delete your own account" },
       { status: 400 }
@@ -91,7 +93,7 @@ export async function DELETE(
   }
 
   // Delete auth user
-  const { error: authError } = await supabase.auth.admin.deleteUser(params.id)
+  const { error: authError } = await supabase.auth.admin.deleteUser(id)
 
   if (authError) {
     return NextResponse.json({ error: authError.message }, { status: 500 })
@@ -101,7 +103,7 @@ export async function DELETE(
   const { error: profileError } = await supabase
     .from("profiles")
     .delete()
-    .eq("id", params.id)
+    .eq("id", id)
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })

@@ -5,7 +5,7 @@ import type { QueryOptions } from "@tanstack/react-query"
  * Defines standardized cache settings for different types of data
  */
 
-export interface CacheConfig extends Omit<QueryOptions, 'queryKey' | 'queryFn'> {
+export interface CacheConfig {
   staleTime: number
   gcTime: number
   refetchOnWindowFocus: boolean
@@ -101,10 +101,6 @@ export const DATA_TYPE_CONFIGS = {
   platformUsers: 'admin',
   teamMembers: 'admin',
 
-  // Additional admin types
-  adminLearners: 'admin',
-  adminCourses: 'admin',
-  adminPurchases: 'admin',
 } as const
 
 export type DataType = keyof typeof DATA_TYPE_CONFIGS

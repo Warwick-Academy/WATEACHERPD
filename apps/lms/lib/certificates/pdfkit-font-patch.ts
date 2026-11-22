@@ -54,7 +54,7 @@ export function patchPDFKitFonts() {
     const originalReadFileSync = fs.readFileSync
 
     // Store the patched function reference to avoid infinite recursion
-    const patchedReadFileSync = function(filePath: string | number | Buffer | URL, options?: any): any {
+    const patchedReadFileSync = function(this: typeof fs, filePath: string | number | Buffer | URL, options?: any): any {
       const filePathStr = filePath.toString()
       
       // Intercept PDFKit font file reads

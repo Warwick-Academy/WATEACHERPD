@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Plus, Trash2, CheckCircle2, Image as ImageIcon } from "lucide-react"
-import { MultipleChoiceQuestion as MCQType } from "../types/quiz"
+import { MultipleChoiceQuestion as MCQType } from "../../types/quiz"
 import FileUpload from "@/components/FileUpload"
 import SafeImage from "@/components/SafeImage"
 

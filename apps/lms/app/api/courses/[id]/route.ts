@@ -54,55 +54,57 @@ export async function GET(
       serviceSupabase = supabase
     }
 
-      // Fetch single course with creator profile
-    let { data: course, error } = await supabase
-      .from("courses")
-      .select(`
-        *,
-        profiles!courses_created_by_fkey (
-          *
-        )
-      `)
-      .eq("id", numericId)
-      .single()
-    
-    // Fetch lessons separately with proper ordering (always fetch, even if course query succeeded)
-    let lessons: any[] = []
-    if (course) {
-      const { data: lessonsData, error: lessonsError } = await supabase
+    const [courseResult, lessonsResult, prerequisitesResult, instructorsResult, enrollmentCountResult] = await Promise.all([
+      supabase
+        .from("courses")
+        .select(`
+          *,
+          profiles!courses_created_by_fkey (
+            *
+          )
+        `)
+        .eq("id", numericId)
+        .single(),
+      supabase
         .from("lessons")
         .select("id, title, type, video_url, text_content, estimated_duration, levels, is_required, order_index")
         .eq("course_id", numericId)
-        .order("order_index", { ascending: true })
-      
-      if (lessonsError) {
-        logError("Error fetching lessons", lessonsError, {
-          component: "courses/[id]/route",
-          action: "GET",
-          courseId: numericId,
-        })
-        return NextResponse.json({ error: "Failed to load course lessons" }, { status: 500 })
-      } else {
-        lessons = lessonsData || []
-        logInfo(`Course API: Fetched ${lessons.length} lessons for course ${numericId}`, { courseId: numericId })
-      }
-      
-      // Always attach lessons to course object (even if empty array)
-      course.lessons = lessons
-    }
+        .order("order_index", { ascending: true }),
+      supabase
+        .from("course_prerequisites")
+        .select(`
+          prerequisite_course_id,
+          courses!course_prerequisites_prerequisite_course_id_fkey (
+            id,
+            title,
+            image
+          )
+        `)
+        .eq("course_id", numericId),
+      supabase
+        .from("course_instructors")
+        .select(`
+          instructor_id,
+          order_index,
+          instructors (
+            id,
+            name,
+            image,
+            bio
+          )
+        `)
+        .eq("course_id", numericId)
+        .order("order_index", { ascending: true }),
+      supabase
+        .from("enrollments")
+        .select("*", { count: "exact", head: true })
+        .eq("course_id", numericId)
+        .neq("status", "cancelled"),
+    ])
+    let { data: course, error } = courseResult
 
-    // Fetch prerequisites
-    const { data: prerequisitesData } = await supabase
-      .from("course_prerequisites")
-      .select(`
-        prerequisite_course_id,
-        courses!course_prerequisites_prerequisite_course_id_fkey (
-          id,
-          title,
-          image
-        )
-      `)
-      .eq("course_id", numericId)
+    let lessons: any[] = []
+    const { data: prerequisitesData } = prerequisitesResult
 
     const prerequisites = (prerequisitesData || []).map((p: any) => ({
       id: p.prerequisite_course_id,
@@ -110,21 +112,7 @@ export async function GET(
       image: p.courses?.image || null,
     }))
 
-    // Fetch course instructors
-    const { data: courseInstructorsData } = await supabase
-      .from("course_instructors")
-      .select(`
-        instructor_id,
-        order_index,
-        instructors (
-          id,
-          name,
-          image,
-          bio
-        )
-      `)
-      .eq("course_id", numericId)
-      .order("order_index", { ascending: true })
+    const { data: courseInstructorsData } = instructorsResult
 
     const instructors = (courseInstructorsData || [])
       .map((ci: any) => ci.instructors)
@@ -152,20 +140,6 @@ export async function GET(
 
       if (!basicError && basicCourse) {
         course = basicCourse
-        // Fetch lessons separately
-        const { data: lessonsData, error: lessonsError } = await supabase
-          .from("lessons")
-          .select("id, title, type, video_url, text_content, estimated_duration, levels, is_required, order_index")
-          .eq("course_id", numericId)
-          .order("order_index", { ascending: true })
-        
-        if (lessonsError) {
-          logError("Error fetching lessons", lessonsError, { component: "courses/[id]/route", action: "GET", courseId: numericId })
-          return NextResponse.json({ error: "Failed to load course lessons" }, { status: 500 })
-        }
-        lessons = lessonsData || []
-        course.lessons = lessons
-        
         // Fetch profile separately
         const { data: profileData } = await supabase
           .from("profiles")
@@ -205,6 +179,18 @@ export async function GET(
     if (!course) {
       return NextResponse.json({ error: "Course not found" }, { status: 404 })
     }
+
+    if (lessonsResult.error) {
+      logError("Error fetching lessons", lessonsResult.error, {
+        component: "courses/[id]/route",
+        action: "GET",
+        courseId: numericId,
+      })
+      return NextResponse.json({ error: "Failed to load course lessons" }, { status: 500 })
+    }
+    lessons = lessonsResult.data || []
+    course.lessons = lessons
+    logInfo(`Course API: Fetched ${lessons.length} lessons for course ${numericId}`, { courseId: numericId })
 
     const viewerClient = await createClient()
     const { data: { user: viewer } } = await viewerClient.auth.getUser()
@@ -286,11 +272,7 @@ export async function GET(
       : null
 
     // Get enrollment count for this course
-    const { count: enrollmentCount, error: enrollmentCountError } = await supabase
-      .from("enrollments")
-      .select("*", { count: "exact", head: true })
-      .eq("course_id", numericId)
-      .neq("status", "cancelled")
+    const { count: enrollmentCount, error: enrollmentCountError } = enrollmentCountResult
 
     if (enrollmentCountError) {
       logWarning("Course API: Error fetching enrollment count", {
@@ -328,14 +310,41 @@ export async function GET(
         
         // Get quiz questions and settings from normalized tables (NO JSONB fallback)
         let quiz_questions = []
-        let quizSettings = {}
+        let quizSettings: {
+          enabled?: boolean
+          maxAttempts?: number
+          showCorrectAnswers?: boolean
+          allowMultipleAttempts?: boolean
+          shuffleQuiz?: boolean
+          timeLimit?: number | null
+          passingScore?: number | null
+        } = {}
         
         // Fetch questions from quiz_questions table (normalized table)
-        const { data: dbQuestions } = await supabaseClientForShuffle
-          .from("quiz_questions")
-          .select("*")
-          .eq("lesson_id", lesson.id)
-          .order("order_index", { ascending: true })
+        const [{ data: dbQuestions }, { data: lessonResources, error: resourcesError }] = await Promise.all([
+          supabaseClientForShuffle
+            .from("quiz_questions")
+            .select("*")
+            .eq("lesson_id", lesson.id)
+            .order("order_index", { ascending: true }),
+          supabaseClientForShuffle
+            .from("lesson_resources")
+            .select(`
+              order_index,
+              resources (
+                id,
+                title,
+                description,
+                type,
+                url,
+                file_size,
+                mime_type,
+                download_count
+              )
+            `)
+            .eq("lesson_id", lesson.id)
+            .order("order_index", { ascending: true }),
+        ])
         
         if (dbQuestions && dbQuestions.length > 0) {
           // Transform database questions to frontend format
@@ -608,24 +617,6 @@ export async function GET(
         
         // Fetch resources from normalized table
         let resources: any[] = []
-        const { data: lessonResources, error: resourcesError } = await supabaseClientForShuffle
-          .from("lesson_resources")
-          .select(`
-            order_index,
-            resources (
-              id,
-              title,
-              description,
-              type,
-              url,
-              file_size,
-              mime_type,
-              download_count
-            )
-          `)
-          .eq("lesson_id", lesson.id)
-          .order("order_index", { ascending: true })
-
         if (resourcesError) {
           logWarning("Error fetching resources from table", {
             component: "courses/[id]/route",

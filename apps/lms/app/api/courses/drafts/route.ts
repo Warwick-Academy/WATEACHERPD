@@ -846,6 +846,14 @@ export async function POST(request: Request) {
             resourceId = newResource.id
           }
           
+          if (resourceId === null) {
+            logError("Resource has no ID", new Error("Missing resource ID"), {
+              component: "courses/drafts/route",
+              action: "POST",
+              lessonId: actualLessonId,
+            })
+            continue
+          }
           currentResourceIds.add(resourceId)
           
           // Create or update lesson_resources junction
@@ -968,8 +976,8 @@ export async function POST(request: Request) {
 
         // Insert new prerequisites
         const prerequisitesToInsert = prerequisites.courseIds
-          .filter((id) => !existingPrerequisiteIds.has(id))
-          .map((prerequisiteCourseId) => ({
+          .filter((id: number) => !existingPrerequisiteIds.has(id))
+          .map((prerequisiteCourseId: number) => ({
             course_id: result.id,
             prerequisite_course_id: prerequisiteCourseId,
           }))
@@ -1041,7 +1049,7 @@ export async function POST(request: Request) {
 
         // Insert new instructors with order_index
         const instructorsToInsert = instructor.instructorIds
-          .filter((id) => !existingInstructorIds.has(id))
+          .filter((id: string) => !existingInstructorIds.has(id))
           .map((instructorId: string, index: number) => {
             // Find the order index in the full list
             const orderIndex = instructor.instructorIds.indexOf(instructorId)
@@ -1070,7 +1078,7 @@ export async function POST(request: Request) {
 
         // Update order_index for existing instructors
         const instructorsToUpdate = instructor.instructorIds
-          .filter((id) => existingInstructorIds.has(id))
+          .filter((id: string) => existingInstructorIds.has(id))
           .map((instructorId: string) => {
             const orderIndex = instructor.instructorIds.indexOf(instructorId)
             return {
@@ -1283,18 +1291,19 @@ export async function GET(request: Request) {
       const resourcesByLesson = new Map<number, any[]>()
       if (allLessonResources.data) {
         for (const lr of allLessonResources.data) {
-          if (!lr.lesson_id || !lr.resources) continue
+          const resource = Array.isArray(lr.resources) ? lr.resources[0] : lr.resources
+          if (!lr.lesson_id || !resource) continue
           if (!resourcesByLesson.has(lr.lesson_id)) {
             resourcesByLesson.set(lr.lesson_id, [])
           }
           resourcesByLesson.get(lr.lesson_id)!.push({
-            id: lr.resources.id.toString(),
-            title: lr.resources.title,
-            description: lr.resources.description,
-            type: lr.resources.type,
-            url: lr.resources.url,
-            fileSize: lr.resources.file_size,
-            downloadCount: lr.resources.download_count,
+            id: resource.id.toString(),
+            title: resource.title,
+            description: resource.description,
+            type: resource.type,
+            url: resource.url,
+            fileSize: resource.file_size,
+            downloadCount: resource.download_count,
           })
         }
       }
@@ -1507,7 +1516,6 @@ export async function GET(request: Request) {
     })
     return NextResponse.json(
       createErrorResponse(error, 500, { component: "courses/drafts/route", action: "GET" }),
-      { error: error?.message || "An unexpected error occurred while fetching draft" },
       { status: 500 }
     )
   }

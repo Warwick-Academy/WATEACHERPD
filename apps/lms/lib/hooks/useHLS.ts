@@ -218,8 +218,6 @@ export function useHLS({ videoRef, src, onError, videoReady = true, autoplay = f
             console.log('XHR setup for URL:', url)
           }
         },
-        // Ensure proper CORS handling
-        cors: true,
       })
 
       hlsRef.current = hls
@@ -450,7 +448,6 @@ export function useHLS({ videoRef, src, onError, videoReady = true, autoplay = f
                   code: data.response.code,
                   text: data.response.text?.substring(0, 500), // First 500 chars
                   url: data.response.url,
-                  headers: data.response.headers
                 } : null,
                 error: data.error,
                 // Additional debugging info

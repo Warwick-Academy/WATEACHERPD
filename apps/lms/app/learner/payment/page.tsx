@@ -87,6 +87,11 @@ export default function PaymentPage() {
   }, [sessionKey])
 
   const processPaymentSuccess = async () => {
+    if (!courseId) {
+      setStatus("error")
+      setError("Course ID is required to process payments")
+      return
+    }
     // Prevent duplicate processing
     const currentStatus = sessionStorage.getItem(sessionKey)
     if (currentStatus === 'processing' || currentStatus === 'completed') {

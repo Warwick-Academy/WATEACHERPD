@@ -8,7 +8,10 @@ export interface Purchase {
   amount: number
   currency: string
   type: "one-time" | "recurring"
-  status: "active" | "cancelled"
+  status: string
+  userId?: string
+  userName?: string
+  userEmail?: string
   purchasedAt?: string
   createdAt: string
   cancelledAt?: string

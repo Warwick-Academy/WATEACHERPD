@@ -1,6 +1,6 @@
 "use client"
 
-export async function logout(userType?: "user" | "admin") {
+export async function logout(userType?: "user" | "admin" | "instructor") {
   try {
     // Call the logout API endpoint to sign out from Supabase
     await fetch("/api/auth/logout", {
@@ -23,7 +23,7 @@ export async function logout(userType?: "user" | "admin") {
   })
 
   // Redirect to appropriate login page
-  if (userType === "admin") {
+  if (userType === "admin" || userType === "instructor") {
     window.location.href = "/auth/admin/login"
   } else {
     window.location.href = "/auth/learner/login"

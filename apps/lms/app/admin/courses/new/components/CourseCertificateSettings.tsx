@@ -84,8 +84,7 @@ export default function CourseCertificateSettings({ settings, onUpdate, courseId
                       <SafeImage
                         src={settings.certificateTemplate}
                         alt="Certificate Template Preview"
-                        className="max-w-full h-auto rounded-md border"
-                        style={{ maxHeight: "200px" }}
+                        className="max-w-full max-h-[200px] h-auto rounded-md border"
                       />
                     </div>
                   )}

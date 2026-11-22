@@ -11,8 +11,8 @@ function getFlutterwaveClient(): Flutterwave {
       throw new Error("NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY is not set")
     }
     flw = new Flutterwave(
-      process.env.FLUTTERWAVE_SECRET_KEY,
-      process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY
+      process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY,
+      process.env.FLUTTERWAVE_SECRET_KEY
     )
   }
   return flw

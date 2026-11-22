@@ -41,6 +41,7 @@ function NewCourseContent() {
       certificate: {
         certificateEnabled: boolean
         certificateTemplate: string
+        certificateTitle?: string
         certificateDescription: string
         signatureImage: string
         signatureName: string
@@ -725,7 +726,7 @@ function NewCourseContent() {
               <CourseBasicInfo
                 data={courseData.basicInfo}
                 onUpdate={(data) => updateCourseData("basicInfo", data)}
-                courseId={currentCourseId || editCourseId}
+                courseId={currentCourseId || editCourseId || undefined}
               />
             </TabsContent>
 
@@ -734,7 +735,7 @@ function NewCourseContent() {
                 lessons={courseData.lessons} 
                 onUpdate={(lessons) => updateCourseData("lessons", lessons)}
                 minimumQuizScore={courseData.settings.minimumQuizScore}
-                courseId={currentCourseId || editCourseId}
+                courseId={currentCourseId || editCourseId || undefined}
               />
             </TabsContent>
 
@@ -742,7 +743,7 @@ function NewCourseContent() {
               <CourseSettings
                 settings={courseData.settings}
                 onUpdate={(settings) => updateCourseData("settings", settings)}
-                courseId={currentCourseId || editCourseId}
+                courseId={currentCourseId || editCourseId || undefined}
                 instructors={instructors}
                 onInstructorsChange={setInstructors}
               />

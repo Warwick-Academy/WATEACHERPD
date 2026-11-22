@@ -22,13 +22,13 @@ const STORAGE_KEYS = {
 /**
  * Enhanced useQuery with unified caching and localStorage persistence
  */
-export function useAppQuery<T>(
+export function useAppQuery<T, TSelected = T>(
   dataType: DataType,
   queryKey: any[],
   queryFn: () => Promise<T>,
   options?: {
     enabled?: boolean
-    select?: (data: T) => any
+    select?: (data: T) => TSelected
     onSuccess?: (data: T) => void
     onError?: (error: any) => void
   }
@@ -36,7 +36,7 @@ export function useAppQuery<T>(
   const config = getCacheConfig(dataType)
   const storageKey = STORAGE_KEYS[dataType as keyof typeof STORAGE_KEYS]
 
-  return useQuery({
+  return useQuery<T, Error, TSelected>({
     queryKey,
     queryFn: async () => {
       try {
@@ -108,10 +108,14 @@ export function useAppMutation<TData, TVariables>(
     mutationFn,
     onMutate: async (variables) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: options?.optimisticUpdate?.queryKey })
+      if (options?.optimisticUpdate) {
+        await queryClient.cancelQueries({ queryKey: options.optimisticUpdate.queryKey })
+      }
 
       // Snapshot the previous value
-      const previousData = queryClient.getQueryData(options?.optimisticUpdate?.queryKey)
+      const previousData = options?.optimisticUpdate
+        ? queryClient.getQueryData(options.optimisticUpdate.queryKey)
+        : undefined
 
       // Optimistically update to the new value
       if (options?.optimisticUpdate) {

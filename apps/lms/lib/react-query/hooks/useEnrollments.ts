@@ -6,6 +6,7 @@ export interface Enrollment {
   user_id: string
   course_id: number
   enrolled_at: string
+  completed_at?: string | null
   status: string
   progress?: number
   last_accessed_at?: string

@@ -16,7 +16,8 @@ export * from "./useCoursePrice"
 // Unified caching system
 export * from "./useAppCache"
 export * from "./useSkeleton"
-export * from "./useRoutePrefetch"
+export { useRoutePrefetch as useContextRoutePrefetch, useAuthPrefetch, useHoverPrefetch } from "./useRoutePrefetch"
 export * from "./useConnectionAware"
-export * from "./useCacheDebug"
+export { useCacheStats as useDetailedCacheStats, useCacheDebug } from "./useCacheDebug"
+export type { CacheStats } from "./useCacheDebug"
 

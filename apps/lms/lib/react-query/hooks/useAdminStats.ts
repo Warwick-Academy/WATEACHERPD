@@ -3,23 +3,17 @@ import { useAppQuery } from "./useAppCache"
 export interface AdminStats {
   totalLearners: number
   totalCourses: number
-  totalEnrollments: number
   totalRevenue: number
   revenueCurrency: string
   totalCompleted: number
   recentActivity: Array<{
     id: string
-    type: "enrollment" | "completion" | "purchase"
-    user: {
-      id: string
-      name: string
-      email: string
-    }
-    course: {
-      id: number
-      title: string
-    }
-    timestamp: string
+    type: "signup" | "enrollment" | "completion" | "payment"
+    user: string
+    course: string
+    amount?: string
+    time: string
+    timestamp: number
   }>
 }
 

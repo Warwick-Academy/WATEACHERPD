@@ -7,6 +7,8 @@ import { uploadFile, downloadFile } from "@/lib/storage/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
 import { getBrandSettings } from "@/lib/supabase/brand-settings"
 
+const CERTIFICATE_DESIGN_SUFFIX = "-light-blue-v1.pdf"
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -121,12 +123,11 @@ export async function GET(
     }
   }
 
-    // Check if a PDF was already generated and stored in the private
-    // certificates bucket (certificate_url holds the storage path).
+    // Older PDFs stay in storage; regenerate them once for the current design.
     let pdfBuffer: Buffer
     const storedPath: string | null = certificate.certificate_url || null
 
-    if (storedPath && !storedPath.startsWith("http")) {
+    if (storedPath && !storedPath.startsWith("http") && storedPath.endsWith(CERTIFICATE_DESIGN_SUFFIX)) {
       try {
         pdfBuffer = await downloadFile(storedPath, CERTIFICATES_BUCKET)
         return new NextResponse(new Uint8Array(pdfBuffer), {
@@ -134,6 +135,7 @@ export async function GET(
             "Content-Type": "application/pdf",
             "Content-Disposition": `attachment; filename="certificate-${certificate.certificate_number}.pdf"`,
             "Content-Length": pdfBuffer.length.toString(),
+            "Cache-Control": "private, no-store",
           },
         })
       } catch (error) {
@@ -181,7 +183,7 @@ export async function GET(
     }
 
     // Verify certificate is enabled for this course (using flat column directly)
-    if (!course.certificate_enabled) {
+    if (!course.certificate_enabled && !storedPath) {
       console.error("[Certificates API] Certificate is not enabled for this course:", course.id)
       return NextResponse.json(
         { error: "Certificate is not enabled for this course" },
@@ -319,7 +321,7 @@ export async function GET(
     }
 
     // Upload the PDF to the private certificates bucket and remember its path
-    const filename = `certificate-${certificate.certificate_number}.pdf`
+    const filename = `certificate-${certificate.certificate_number}${CERTIFICATE_DESIGN_SUFFIX}`
     const courseId = certificate.course_id
     const storageKey = getStoragePath("certificate", certificate.user_id, filename, undefined, undefined, courseId)
 
@@ -375,6 +377,7 @@ export async function GET(
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="certificate-${certificate.certificate_number}.pdf"`,
         "Content-Length": pdfBuffer.length.toString(),
+        "Cache-Control": "private, no-store",
       },
     })
   } catch (error: any) {

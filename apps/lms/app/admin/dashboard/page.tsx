@@ -167,7 +167,7 @@ export default function InstructorDashboard() {
           <CardContent className="flex-1 min-h-0 overflow-hidden">
             {statsError ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-sm text-destructive">{statsError}</p>
+                <p className="text-sm text-destructive">{statsError.message}</p>
               </div>
             ) : stats?.recentActivity && stats.recentActivity.length > 0 ? (
               <div className="h-full overflow-y-auto pr-2 space-y-4">

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Plus, Trash2, X } from "lucide-react"
-import { ShortAnswerQuestion as SAQuestionType } from "../types/quiz"
+import { ShortAnswerQuestion as SAQuestionType } from "../../types/quiz"
 
 interface ShortAnswerQuestionProps {
   question: SAQuestionType

@@ -89,7 +89,7 @@ export default function CourseCard({
     // Find first incomplete lesson
     for (let i = 0; i < course.lessons.length; i++) {
       const lesson = course.lessons[i]
-      if (!lesson) continue // Skip null/undefined lessons
+      if (!lesson || lesson.id === undefined) continue
       const lessonId = typeof lesson.id === 'string' ? parseInt(lesson.id, 10) : lesson.id
       if (!completedLessonIds.has(lessonId)) {
         return i

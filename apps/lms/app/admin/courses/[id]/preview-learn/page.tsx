@@ -24,6 +24,14 @@ interface Course {
     content?: any
     resources?: Array<any>
     quiz?: any
+    quiz_questions?: Array<{
+      id?: string | number
+      question?: string
+      text?: string
+      options?: string[]
+      correct_answer?: number
+      correctOption?: number
+    }>
     estimated_duration?: number
   }>
 }
@@ -204,7 +212,7 @@ export default function AdminCoursePreviewLearningPage() {
                       {currentLesson.resources && currentLesson.resources.length > 0 && (
                         <TabsTrigger value="resources">Resources</TabsTrigger>
                       )}
-                      {currentLesson.quiz && (
+                      {currentLesson.quiz?.enabled !== false && !!currentLesson.quiz_questions?.length && (
                         <TabsTrigger value="quiz">Quiz</TabsTrigger>
                       )}
                     </TabsList>
@@ -229,9 +237,23 @@ export default function AdminCoursePreviewLearningPage() {
                       </TabsContent>
                     )}
 
-                    {currentLesson.quiz && (
+                    {currentLesson.quiz?.enabled !== false && !!currentLesson.quiz_questions?.length && (
                       <TabsContent value="quiz" className="mt-6">
-                        <QuizComponent lesson={currentLesson} courseId={course.id} />
+                        <QuizComponent
+                          quiz={{
+                            ...currentLesson.quiz,
+                            questions: currentLesson.quiz_questions.map((question) => ({
+                              id: question.id?.toString(),
+                              question: question.question || question.text || "",
+                              options: question.options || [],
+                              correctAnswer: question.correct_answer ?? question.correctOption ?? 0,
+                            })),
+                          }}
+                          onComplete={() => {}}
+                          courseId={String(course.id)}
+                          lessonId={currentLesson.id}
+                          previewMode
+                        />
                       </TabsContent>
                     )}
                   </Tabs>

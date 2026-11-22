@@ -29,7 +29,7 @@ export function getUserByEmail(email: string): User | undefined {
   return users.find((user) => user.email === email)
 }
 
-export type UserType = "user" | "admin"
+export type UserType = "user" | "admin" | "instructor"
 
 export interface User {
   id: string

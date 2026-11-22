@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Trash2 } from "lucide-react"
-import { TrueFalseQuestion as TFQuestionType } from "../types/quiz"
+import { TrueFalseQuestion as TFQuestionType } from "../../types/quiz"
 import FileUpload from "@/components/FileUpload"
 import SafeImage from "@/components/SafeImage"
 

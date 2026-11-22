@@ -12,8 +12,8 @@ import {
   User,
   Settings,
   LogOut,
-  ShoppingBag,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Logo from "./Logo"
 import { ThemeToggle } from "./ThemeToggle"
 import { logout } from "../utils/logout"
@@ -24,32 +24,34 @@ interface LeftSidebarProps {
   userType: "user" | "admin" | "instructor"
 }
 
+interface MenuItem {
+  href: string
+  icon: LucideIcon
+  label: string
+  external?: boolean
+  isLogout?: boolean
+}
+
 export default function LeftSidebar({ userType }: LeftSidebarProps) {
   const pathname = usePathname()
 
   // Build admin/instructor menu items
-  const adminMenuItems = [
+  const adminMenuItems: MenuItem[] = [
     { href: "/admin/dashboard", icon: Home, label: "Dashboard" },
     { href: "/admin/courses", icon: BookOpen, label: "Courses" },
     { href: "/admin/learners", icon: Users, label: "Learners" },
   ]
 
-  // Add purchases only for admin (not instructor)
-  if (userType === "admin") {
-    adminMenuItems.push({ href: "/admin/purchases", icon: ShoppingBag, label: "Purchases" })
-  }
-
-  const menuItems = {
+  const menuItems: Record<LeftSidebarProps["userType"], MenuItem[]> = {
     user: [
       { href: "/learner/dashboard", icon: Home, label: "Dashboard" },
       { href: "/learner/courses", icon: BookOpen, label: "Courses" },
-      { href: "/learner/purchase", icon: ShoppingBag, label: "Purchase" },
     ],
     admin: adminMenuItems,
-    instructor: adminMenuItems, // Instructors get same menu as admin but purchases is conditionally added above
+    instructor: adminMenuItems,
   }
 
-  const bottomMenuItems = {
+  const bottomMenuItems: Record<"user" | "admin", MenuItem[]> = {
     user: [
       { href: "/learner/profile", icon: User, label: "Profile" },
       { href: "#", icon: LogOut, label: "Log Out", isLogout: true },
@@ -62,7 +64,7 @@ export default function LeftSidebar({ userType }: LeftSidebarProps) {
   }
 
   const currentMenu = menuItems[userType] || menuItems.admin
-  const currentBottomMenu = bottomMenuItems[userType] || bottomMenuItems.admin
+  const currentBottomMenu = bottomMenuItems[userType === "user" ? "user" : "admin"]
 
   return (
     <div className="w-64 h-screen py-4 flex-col fixed left-0 top-0 bg-background-element border-r border-border hidden lg:flex">

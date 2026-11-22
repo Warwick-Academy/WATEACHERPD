@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Trash2 } from "lucide-react"
-import { EssayQuestion as EssayQuestionType } from "../types/quiz"
+import { EssayQuestion as EssayQuestionType } from "../../types/quiz"
 
 interface EssayQuestionProps {
   question: EssayQuestionType

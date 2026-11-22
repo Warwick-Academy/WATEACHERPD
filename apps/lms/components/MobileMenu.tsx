@@ -13,8 +13,8 @@ import {
   HelpCircle,
   Settings,
   LogOut,
-  ShoppingBag,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -29,6 +29,14 @@ interface MobileMenuProps {
     name: string
     profileImage: string
   }
+}
+
+interface SidebarItem {
+  href: string
+  label: string
+  icon: LucideIcon
+  external?: boolean
+  isLogout?: boolean
 }
 
 export default function MobileMenu({ userType, user }: MobileMenuProps) {
@@ -60,15 +68,10 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
   }
 
   // Build admin/instructor sidebar items
-  const adminSidebarItems = [
+  const adminSidebarItems: SidebarItem[] = [
     { href: "/admin/learners", label: "Learners", icon: Users },
     { href: "https://t.me/enyosam", label: "Support", icon: HelpCircle, external: true },
   ]
-
-  // Add purchases only for admin (not instructor)
-  if (userType === "admin") {
-    adminSidebarItems.push({ href: "/admin/purchases", label: "Purchases", icon: ShoppingBag })
-  }
 
   // Add settings only for admin (not instructor)
   if (userType === "admin") {
@@ -77,9 +80,8 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
 
   adminSidebarItems.push({ href: "#", label: "Log Out", icon: LogOut, isLogout: true })
 
-  const sidebarItems = {
+  const sidebarItems: Record<MobileMenuProps["userType"], SidebarItem[]> = {
     user: [
-      { href: "/learner/purchase", label: "Purchase", icon: ShoppingBag },
       { href: "#", label: "Log Out", icon: LogOut, isLogout: true },
     ],
     admin: adminSidebarItems,
@@ -168,7 +170,7 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
                       </button>
                     )
                   }
-                  return (item as any).external ? (
+                  return item.external ? (
                     <a
                       key={item.href}
                       href={item.href}

@@ -302,11 +302,11 @@ export function renderCertificate(
     } catch (error) {
       console.error("[Certificate Renderer] Failed to render template background:", error)
       // Fallback to hardcoded background
-      doc.rect(0, 0, doc.page.width, doc.page.height).fill("#FEF9E7")
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill("#E6F4FA")
     }
   } else {
     // Hardcoded background
-    doc.rect(0, 0, doc.page.width, doc.page.height).fill("#FEF9E7")
+    doc.rect(0, 0, doc.page.width, doc.page.height).fill("#E6F4FA")
     
     // Borders
     doc.lineWidth(3).strokeColor("#2C3E50")

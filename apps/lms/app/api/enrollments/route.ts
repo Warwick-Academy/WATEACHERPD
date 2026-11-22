@@ -92,22 +92,6 @@ export async function GET() {
       }
     }
 
-    if (error) {
-      logError("Enrollments API: Database error", error, {
-        component: "enrollments/route",
-        action: "GET",
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        userId: user.id,
-      })
-      return NextResponse.json({ 
-        error: error.message,
-        details: error.details,
-        hint: error.hint,
-      }, { status: 500 })
-    }
-
     // Return empty array if no enrollments (not an error)
     return NextResponse.json({ enrollments: data || [] })
   } catch (error: any) {

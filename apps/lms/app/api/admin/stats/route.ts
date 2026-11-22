@@ -115,7 +115,7 @@ export async function GET() {
         logWarning("Could not fetch admin currency, using USD", {
           component: "admin/stats/route",
           action: "GET",
-          error: settingsError.message,
+          error: settingsError,
         })
       }
     }
@@ -123,7 +123,7 @@ export async function GET() {
     // Get total revenue from completed/successful payments
     const { data: payments, error: paymentsError } = await adminClient
       .from("payments")
-      .select("payment_amount, payment_currency, status")
+      .select("id, payment_amount, payment_currency, status")
       .in("status", ["completed", "successful"])
 
     if (paymentsError) {
@@ -154,7 +154,7 @@ export async function GET() {
             component: "admin/stats/route",
             action: "GET",
             paymentId: payment.id,
-            error: error.message,
+            error,
             fallbackAmount: payment.payment_amount
           })
           // Fallback: use original amount if conversion fails
@@ -271,13 +271,13 @@ export async function GET() {
             .from("profiles")
             .select("id, name")
             .in("id", enrollmentUserIds)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [], error: null }),
       enrollmentCourseIds.length > 0
         ? adminClient
             .from("courses")
             .select("id, title")
             .in("id", enrollmentCourseIds)
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [], error: null })
     ])
 
     // Check for errors in user/course queries

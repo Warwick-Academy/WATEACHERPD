@@ -19,6 +19,7 @@ import { toast } from "sonner"
 interface Course {
   id: number
   title: string
+  settings?: { minimumQuizScore?: number | null }
   lessons: Array<{
     id: number
     title: string
@@ -26,6 +27,13 @@ interface Course {
     settings?: any
     resources?: Array<any>
     quiz_questions?: Array<any>
+    quiz?: {
+      enabled?: boolean
+      passingScore?: number | null
+      showCorrectAnswers?: boolean
+      allowMultipleAttempts?: boolean
+      maxAttempts?: number
+    }
     // Content fields (spread from lesson.content)
     url?: string
     html?: string
@@ -146,7 +154,8 @@ export default function AdminCourseLearningPage() {
   }
 
   const handleLessonComplete = async () => {
-    if (!course || completedLessons.includes(currentLessonIndex)) {
+    if (!course) return
+    if (completedLessons.includes(currentLessonIndex)) {
       const currentLesson = course.lessons[currentLessonIndex]
       if (currentLesson?.quiz_questions && currentLesson.quiz_questions.length > 0 && currentLesson.quiz?.enabled !== false) {
         setActiveTab("quiz")
@@ -211,14 +220,6 @@ export default function AdminCourseLearningPage() {
       delete updated[lessonId]
       return updated
     })
-  }
-
-  const handleVideoProgressUpdate = async (progressPercentage: number) => {
-    // Track video progress locally but don't save to API
-    setVideoProgress((prev) => ({
-      ...prev,
-      [currentLessonIndex]: progressPercentage,
-    }))
   }
 
   const handleQuizComplete = async (answers?: number[], shuffledQuestions?: any[], attemptCount?: number) => {
@@ -386,7 +387,7 @@ export default function AdminCourseLearningPage() {
   }
 
   const handlePreviousLesson = () => {
-    if (currentLessonIndex > 0) {
+    if (course && currentLessonIndex > 0) {
       const prevIndex = currentLessonIndex - 1
       // Check if can access previous lesson
       if (!canAccessLesson(prevIndex)) {

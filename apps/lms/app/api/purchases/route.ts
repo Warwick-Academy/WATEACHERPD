@@ -81,7 +81,7 @@ export async function GET(request: Request) {
         component: "purchases/route",
         action: "GET",
         error: error.message,
-        userId: targetUserId,
+        userId: targetUserId ?? undefined,
       })
       let fallbackQuery = clientToUse
         .from("payments")
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         code: error.code,
         details: error.details,
         hint: error.hint,
-        userId: targetUserId,
+        userId: targetUserId ?? undefined,
       })
       return NextResponse.json({ 
         error: error.message,

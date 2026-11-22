@@ -88,7 +88,7 @@ export async function GET() {
         existingProfile = checkProfile
       }
       
-      if (existingProfile) {
+      if (existingProfile && serviceClient) {
         // Profile exists but might have invalid user_type - try to fix it
         logInfo("Profile exists but may have invalid user_type, attempting to fix", { userType: existingProfile.user_type, userId: user.id })
         const { data: updatedProfile, error: updateError } = await serviceClient

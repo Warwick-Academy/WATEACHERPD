@@ -532,16 +532,15 @@ class EmailNotificationService {
         return
       }
 
+      const profile = Array.isArray(payment.profiles) ? payment.profiles[0] : payment.profiles
+      const course = Array.isArray(payment.courses) ? payment.courses[0] : payment.courses
       console.log("Email service: Payment data:", {
         id: payment.id,
         amount: payment.payment_amount,
         currency: payment.payment_currency,
-        user: payment.profiles?.email,
-        course: payment.courses?.title
+        user: profile?.email,
+        course: course?.title
       })
-
-      const profile = payment.profiles as any
-      const course = payment.courses as any
 
       if (!profile || !course) {
         logError("Missing profile or course data for payment email", null, {
@@ -562,8 +561,8 @@ class EmailNotificationService {
         firstName,
         lastName,
         transactionId: payment.transaction_id || payment.id,
-        amount: parseFloat(payment.payment_amount?.toString() || payment.amount?.toString() || "0"),
-        currency: payment.payment_currency || payment.currency || "USD",
+        amount: parseFloat(payment.payment_amount?.toString() || "0"),
+        currency: payment.payment_currency || "USD",
         courseName: course.title,
         courseId: course.id,
         paymentMethod: payment.payment_method || "card",
@@ -658,8 +657,8 @@ class EmailNotificationService {
         firstName,
         lastName,
         transactionId: payment.transaction_id || payment.id,
-        amount: parseFloat(payment.payment_amount?.toString() || payment.amount?.toString() || "0"),
-        currency: payment.payment_currency || payment.currency || "USD",
+        amount: parseFloat(payment.payment_amount?.toString() || "0"),
+        currency: payment.payment_currency || "USD",
         courseName: course.title,
         courseId: course.id,
         paymentMethod: payment.payment_method || "card",
@@ -875,8 +874,8 @@ class EmailNotificationService {
           courseName: course.title,
           courseId: course.id,
           transactionId: payment.transaction_id || payment.id,
-          amount: parseFloat(payment.payment_amount?.toString() || payment.amount?.toString() || "0"),
-          currency: payment.payment_currency || payment.currency || "USD",
+          amount: parseFloat(payment.amount?.toString() || "0"),
+          currency: payment.currency || "USD",
           paymentDate: payment.completed_at || new Date().toISOString(),
         })
       }

@@ -225,7 +225,7 @@ export default function InstructorCoursePreviewPage() {
   
   // If instructors are enabled and there are instructors, use them
   // Otherwise, fallback to course creator
-  const instructors = hasInstructors && instructorsEnabled
+  const instructors = course.instructors && hasInstructors && instructorsEnabled
     ? course.instructors.map((inst: any) => ({
         name: inst.name || "Instructor",
         profileImage: inst.image || "/placeholder.svg?height=200&width=200",

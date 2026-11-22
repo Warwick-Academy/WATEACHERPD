@@ -13,12 +13,12 @@ export interface PlatformSettings {
   logo_black?: string
   logo_white?: string
   favicon?: string
-  contact_email?: string
-  app_url?: string
-  seo_title?: string
-  seo_description?: string
-  seo_keywords?: string
-  seo_image?: string
+  contact_email?: string | null
+  app_url?: string | null
+  seo_title?: string | null
+  seo_description?: string | null
+  seo_keywords?: string | null
+  seo_image?: string | null
   // Platform-wide certificate defaults
   certificate_template_completion?: string | null
   certificate_template_participation?: string | null

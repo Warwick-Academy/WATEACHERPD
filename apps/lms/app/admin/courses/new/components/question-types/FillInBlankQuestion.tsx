@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Plus, Trash2, X } from "lucide-react"
-import { FillInBlankQuestion as FIBQuestionType } from "../types/quiz"
+import { FillInBlankQuestion as FIBQuestionType } from "../../types/quiz"
 
 interface FillInBlankQuestionProps {
   question: FIBQuestionType

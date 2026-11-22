@@ -106,9 +106,10 @@ async function migrateResources() {
         }
         
         if (existingResource) {
-          resourceId = existingResource.id
+          const existingId: number = existingResource.id
+          resourceId = existingId
           resourcesReused++
-          resourceUrlMap.set(resourceKey, resourceId)
+          resourceUrlMap.set(resourceKey, existingId)
         } else {
           // Extract S3 key from URL if it's an S3 URL
           let s3Key: string | null = null
@@ -143,9 +144,10 @@ async function migrateResources() {
             continue
           }
           
-          resourceId = newResource.id
+          const newId: number = newResource.id
+          resourceId = newId
           resourcesCreated++
-          resourceUrlMap.set(resourceKey, resourceId)
+          resourceUrlMap.set(resourceKey, newId)
         }
       }
       

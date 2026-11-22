@@ -8,22 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpDown, BookOpen } from "lucide-react"
 import { useClientAuthState } from "@/utils/client-auth"
 import type { User } from "@/data/users"
+import type { Module } from "@/data/courses"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import CourseCard from "@/components/CourseCard"
 import CourseCardSkeleton from "@/components/CourseCardSkeleton"
 import CoursesPageSkeleton from "@/components/CoursesPageSkeleton"
 import { useCourses, useEnrollments, useRealtimeEnrollments, useRealtimeCourses, useSettings, useProfile } from "@/lib/react-query/hooks"
 import { usePageSkeleton } from "@/lib/react-query/hooks/useSkeleton"
-
-interface Course {
-  id: number
-  title: string
-  description?: string
-  image?: string
-  price?: number
-  enrolledStudents?: number
-  settings?: any
-}
 
 export default function CoursesPage() {
   const router = useRouter()
@@ -64,7 +55,7 @@ export default function CoursesPage() {
   useRealtimeCourses() // Listen to course changes and enrollment count updates
 
   // Process courses data
-  const courses = useMemo(() => {
+  const courses = useMemo<Module[]>(() => {
     if (!coursesData?.courses) return []
     return coursesData.courses
       .filter((course: any) => course != null) // Filter out null/undefined courses
@@ -102,7 +93,7 @@ export default function CoursesPage() {
     .filter((e: any) => e.status === "completed")
     .map((e: any) => e.course_id)
 
-  const filterCourses = (coursesList: Course[]) => {
+  const filterCourses = (coursesList: Module[]) => {
     let filtered = coursesList.filter((course) => course.title.toLowerCase().includes(searchTerm.toLowerCase()))
     
     // Debug: Log enrolled course IDs and courses

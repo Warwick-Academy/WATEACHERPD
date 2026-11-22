@@ -6,7 +6,7 @@
 // Email template structure
 export interface EmailTemplate {
   subject: string | ((data: any) => string)
-  html: (data: any) => string
+  html: (data: any) => string | Promise<string>
   text: (data: any) => string
 }
 
