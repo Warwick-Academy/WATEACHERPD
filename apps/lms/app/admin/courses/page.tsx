@@ -293,12 +293,13 @@ export default function ManageCoursesPage() {
   }, [mounted, loadDrafts])
 
 
-  // Show skeleton ONLY on true initial load (no cached data exists)
-  // Once we have data, never show skeleton again (even during refetches)
-  // Show cached data instantly even if isPending is true
+  // Show the skeleton until after mount so the first client render matches the
+  // server render (the server has no localStorage cache, so rendering cached
+  // courses during hydration causes a hydration mismatch and DOM errors).
+  // After mount, only show it when there is no data at all.
   const hasCachedData = !!coursesData?.courses && coursesData.courses.length > 0
   const hasAnyData = hasCachedData || draftCourses.length > 0
-  const showSkeleton = (!mounted || authLoading || !user || (userType !== "admin" && userType !== "instructor")) && !hasAnyData
+  const showSkeleton = !mounted || ((authLoading || !user || (userType !== "admin" && userType !== "instructor")) && !hasAnyData)
 
   const handleDeleteClick = (courseId: number) => {
     setCourseToDelete(courseId)
