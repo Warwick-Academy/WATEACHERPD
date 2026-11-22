@@ -93,6 +93,40 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   return buffer
 }
 
+// Make a signature image blend with the certificate background: light (paper)
+// pixels become transparent so only the ink remains. Also converts formats
+// PDFKit cannot embed (e.g. WebP) to PNG. Falls back to the original image.
+async function makeSignatureTransparent(buffer: Buffer): Promise<Buffer> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { data, info } = await sharp(buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    // Luminance keying with a soft ramp: pixels lighter than 240 vanish,
+    // darker than 180 stay fully opaque, in between fades smoothly so
+    // anti-aliased stroke edges stay clean.
+    for (let i = 0; i < data.length; i += info.channels) {
+      const luminance = (data[i] + data[i + 1] + data[i + 2]) / 3
+      let alpha = 255
+      if (luminance >= 240) {
+        alpha = 0
+      } else if (luminance > 180) {
+        alpha = Math.round((255 * (240 - luminance)) / 60)
+      }
+      data[i + 3] = Math.min(data[i + 3], alpha)
+    }
+
+    return await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+      .png()
+      .toBuffer()
+  } catch (error) {
+    console.warn("[PDF Generation] Signature transparency processing failed, using original image:", error)
+    return buffer
+  }
+}
+
 // Helper function to get the path to Poppins font files
 function getPoppinsFontPath(fontName: string): string | null {
   const possiblePaths = [
@@ -228,6 +262,8 @@ export async function generateCertificatePDF(data: CertificateData): Promise<Buf
         try {
           console.log("[PDF Generation] Fetching signature image:", data.signatureImage)
           signatureBuffer = await fetchImageBuffer(data.signatureImage)
+          // Remove the white paper background so the signature blends with the certificate
+          signatureBuffer = await makeSignatureTransparent(signatureBuffer)
           console.log("[PDF Generation] Signature fetched successfully, buffer size:", signatureBuffer.length, "bytes")
         } catch (error) {
           console.warn("[PDF Generation] Failed to fetch signature image:", error)

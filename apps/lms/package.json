@@ -91,6 +91,7 @@
     "react-webcam": "latest",
     "recharts": "latest",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "socket.io": "latest",
     "socket.io-client": "latest",
     "sonner": "latest",
