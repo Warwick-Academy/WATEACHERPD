@@ -1201,7 +1201,7 @@ export default function CourseLearningPage() {
         </div>
 
         {/* Sidebar - Hidden on mobile/tablet, shown on desktop (lg+) */}
-        <div className="hidden lg:flex flex-shrink-0 w-full lg:w-[30%] border-t lg:border-t-0 lg:border-l border-border bg-card order-2 lg:order-none flex flex-col min-h-0 lg:h-full">
+        <div className="hidden lg:flex flex-shrink-0 w-full lg:w-[30%] border-t lg:border-t-0 lg:border-l border-border bg-card order-2 lg:order-none flex-col min-h-0 lg:h-full">
           <div className="flex-1 flex flex-col min-h-0 p-3 sm:p-4 md:p-5">
             <div className="mb-3 sm:mb-4 flex-shrink-0">
               <h3 className="text-xs sm:text-sm md:text-base font-semibold mb-2 sm:mb-2.5">Course Progress</h3>
