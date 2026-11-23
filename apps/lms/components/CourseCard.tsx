@@ -295,7 +295,7 @@ export default function CourseCard({
             {course.title}
           </CardTitle>
         </Link>
-        <LessonLevelBadges levels={getCourseLevels(course.lessons)} />
+        <LessonLevelBadges levels={course.section_level ? [course.section_level] : getCourseLevels(course.lessons)} />
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-4">
           <div className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />

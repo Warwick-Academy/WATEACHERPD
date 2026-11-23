@@ -176,6 +176,10 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
    # AI quiz generation (optional; server-only)
    ANTHROPIC_API_KEY=your_anthropic_api_key
    AI_QUIZ_MODEL=claude-sonnet-5-5
+   AI_COURSE_MODEL=claude-sonnet-5-5
+   AI_COURSE_FAST_MODEL=claude-haiku-5-5
+   # Optional comma-separated domain allowlist for course import
+   COURSE_IMPORT_ALLOWED_DOMAINS=
 
    # App URL
    NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -242,6 +246,23 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - File uploads go straight from the browser to Supabase Storage using signed upload URLs issued by the server. Only admins can upload course content; any signed-in user can upload their own profile picture.
       - Size limits default to 5 MB for images, 25 MB for documents and 50 MB for videos (the largest single file on the Supabase free plan). Larger videos should be uploaded to YouTube (unlisted) and embedded by link.
       - Platform-wide certificate templates, descriptions, additional text and the default signature are edited under Settings → Certificates. Certificate descriptions support the placeholders `[Student Name]`, `[Course Name]`, `[Grade]` and `[PD Hours]`.
+
+   j. **Enable course import**
+      - Apply `apps/lms/supabase/migrations/20261122030000_course_imports.sql` in the Supabase SQL Editor after the lesson levels and storage migrations. It adds `source_url`, `pd_hours`, import history and service-role-only transactional import functions.
+      - Set `ANTHROPIC_API_KEY` and, optionally, `AI_COURSE_MODEL` and `AI_COURSE_FAST_MODEL` in the LMS server environment and Netlify. Their defaults are `claude-sonnet-5-5` and `claude-haiku-5-5`; both models must be available to the Anthropic account. These values are server-only. Course and lesson source text is sent to Anthropic; never import confidential material or material you lack permission to use.
+      - Optionally set `COURSE_IMPORT_ALLOWED_DOMAINS` to a comma-separated list of permitted hosts. LearnFree imports require both `learnfree.org` and `api.one81.com`; YouTube metadata and duration lookup require `youtube.com`, and shortened links also require `youtu.be`. The allowlist applies to redirects and all source requests.
+      - Admins can create a course from a URL on the Courses page after confirming permission for automated retrieval, AI processing, linking and embedding. LearnFree's published terms restrict automated extraction; obtain separate permission before importing it. AI output can be inaccurate and should be reviewed in the editor after publication.
+      - Imports are limited to 40 entries and five per admin per hour. Progress can be resumed after a refresh. A source-only quiz is included without an embedded video or generated quiz. If the owner cannot be identified, the credit is omitted and the import reports a warning.
+      - AI-driven steps can take up to 50 seconds each. Source fetches have an 8.5-second limit per attempt and retry timeouts up to twice. If a step still fails, resume the import to retry it.
+      - The preview is recorded in the browser; leave the page open. Longer courses produce longer previews. If recording or upload fails, the course is published without a preview and the warning remains in the import history.
+      - Direct YouTube video imports inspect the public description for timestamps and offer a choice between the suggested lessons and one full-video lesson. An introduction immediately before numbered modules is included in the first module. Each lesson embeds the corresponding start and end times. No transcript is imported: add lesson content, levels and quizzes manually and review AI-generated course details.
+      - To replace the single lesson of an existing YouTube-sourced course, first apply `apps/lms/supabase/migrations/20261123010000_youtube_chapter_replacement.sql`, then select **Review video chapters** on the course. Confirming replaces the old lesson and its content, quizzes and resource links; it is blocked if the course has learner enrolments or activity. Published courses change immediately. Review the existing course preview and certificate after replacement.
+
+   k. **Enable course splitting**
+      - Apply `apps/lms/supabase/migrations/20261122040000_course_splits.sql` in the Supabase SQL Editor after the course-import migration.
+      - Admins can choose **Split into sections** on a course or completed import. Suggestions group lessons in their existing order, not by topic; review and adjust the titles, lesson assignments and levels before creating the separate draft courses. The original course, its enrollments and progress are not changed.
+      - Each draft copies the saved lessons, quizzes and linked resources, retains the original enrollment settings, and has its own calculated PD credit and certificate. Review each draft and publish it when ready.
+      - Keep the page open while each section's preview is recorded and uploaded. If media generation fails or the page is refreshed, return to the split page and resume; drafts already created are retained.
 
 5. **Start the development server**
    ```bash

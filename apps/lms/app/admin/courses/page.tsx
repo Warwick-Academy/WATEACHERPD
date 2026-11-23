@@ -36,6 +36,8 @@ interface Course {
   title: string
   description: string
   image: string
+  source_url?: string | null
+  section_level?: LessonLevel | null
   lessons: Array<{ id?: string | number; estimatedDuration?: number; levels?: LessonLevel[] }>
   price?: number
   totalDurationMinutes?: number
@@ -235,6 +237,8 @@ export default function ManageCoursesPage() {
         title: course.title || "",
         description: course.description || "",
         image: course.image || course.thumbnail || "/placeholder.svg",
+        source_url: course.source_url,
+        section_level: course.section_level,
         lessons: lessons,
         price: course.price || 0,
         totalDurationMinutes: totalDurationMinutes,
@@ -437,7 +441,7 @@ export default function ManageCoursesPage() {
           )}
         </div>
         <CardTitle className="text-base sm:text-lg mb-2 line-clamp-2">{course.title}</CardTitle>
-        <LessonLevelBadges levels={getCourseLevels(course.lessons)} />
+        <LessonLevelBadges levels={course.section_level ? [course.section_level] : getCourseLevels(course.lessons)} />
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground mt-3 sm:mt-4">
           <div className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />
@@ -490,6 +494,13 @@ export default function ManageCoursesPage() {
         <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 line-clamp-3">{course.description}</p>
       </CardContent>
       <CardFooter className="flex flex-row flex-wrap gap-2 p-4 sm:p-6 pt-0">
+        {course.id > 0 && userType === "admin" && (
+          <Button asChild variant="outline" size="sm"><Link href={`/admin/courses/${course.id}/split`}>Split into sections</Link></Button>
+        )}
+        {course.id > 0 && userType === "admin" && course.lessons.length === 1 &&
+          course.source_url && /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be|youtube-nocookie\.com)\//i.test(course.source_url) && (
+            <Button asChild variant="outline" size="sm"><Link href={`/admin/courses/${course.id}/youtube-chapters`}>Review video chapters</Link></Button>
+          )}
         {!isDraft && userType === "admin" && (
           <Button variant="outline" size="sm" onClick={() => setAssignmentCourse(course)}>Assign to users</Button>
         )}
@@ -606,11 +617,18 @@ export default function ManageCoursesPage() {
             Create, edit, and manage all courses in your learning platform
           </p>
         </div>
-        <Link href="/admin/courses/new" className="w-full sm:w-auto">
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto min-h-[44px]">
-            <BookOpen className="mr-2 h-4 w-4" /> Create Course
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          {userType === "admin" && (
+            <Button asChild variant="outline" className="min-h-[44px]">
+              <Link href="/admin/courses/import">Create course from URL</Link>
+            </Button>
+          )}
+          <Link href="/admin/courses/new" className="w-full sm:w-auto">
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto min-h-[44px]">
+              <BookOpen className="mr-2 h-4 w-4" /> Create Course
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="mb-6 space-y-4">
