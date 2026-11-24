@@ -20,6 +20,7 @@ export default function UserLoginPage() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const router = useRouter()
@@ -35,6 +36,7 @@ export default function UserLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setUnconfirmed(false)
     setLoading(true)
 
     try {
@@ -56,6 +58,7 @@ export default function UserLoginPage() {
         // Show specific error message from API
         const errorMessage = data.error || "Login failed"
         setError(errorMessage)
+        setUnconfirmed(data.code === "email_not_confirmed")
         
         // If admin tried to login, redirect to admin login after a short delay
         if (errorMessage.includes("Admin accounts cannot login")) {
@@ -101,7 +104,10 @@ export default function UserLoginPage() {
               {error && (
                 <Alert variant="destructive" className="text-sm">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
+                  <AlertDescription className="text-xs sm:text-sm">
+                    {error}
+                    {unconfirmed && <> Open the link in your email, then click the confirmation button on the website. <Link href="/auth/confirm" className="underline">Request a new confirmation email</Link>.</>}
+                  </AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">

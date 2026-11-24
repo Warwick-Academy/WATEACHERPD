@@ -20,6 +20,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -27,6 +28,7 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setUnconfirmed(false)
     setLoading(true)
 
     try {
@@ -46,6 +48,7 @@ export default function AdminLoginPage() {
 
       if (!response.ok) {
         setError(data.error || "Login failed")
+        setUnconfirmed(data.code === "email_not_confirmed")
         return
       }
 
@@ -89,7 +92,10 @@ export default function AdminLoginPage() {
               {error && (
                 <Alert variant="destructive" className="text-sm">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
+                  <AlertDescription className="text-xs sm:text-sm">
+                    {error}
+                    {unconfirmed && <> Open the link in your email, then click the confirmation button on the website. <Link href="/auth/confirm" className="underline">Request a new confirmation email</Link>.</>}
+                  </AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">

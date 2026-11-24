@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
     if (typeof payload !== "object" || payload === null || !("action" in payload) ||
-        (payload.action !== "reset-password" && payload.action !== "resend-confirmation")) {
+        (payload.action !== "reset-password" && payload.action !== "resend-confirmation" && payload.action !== "confirm-email")) {
       return NextResponse.json({ error: "Invalid account action" }, { status: 400 })
     }
     if (payload.action === "reset-password" &&
@@ -76,17 +76,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const account = await getAccount(auth.service, id)
     if (account.response) return account.response
 
-    if (payload.action === "resend-confirmation") {
+    if (payload.action === "resend-confirmation" || payload.action === "confirm-email") {
       if (account.user.email_confirmed_at) {
         return NextResponse.json({ error: "This account's email is already confirmed" }, { status: 409 })
       }
       if (!account.user.email) {
         return NextResponse.json({ error: "This account has no email address" }, { status: 400 })
       }
-      const { error } = await auth.supabase.auth.resend({ type: "signup", email: account.user.email })
-      if (error) {
-        logError("Failed to resend signup confirmation", error, { component: "admin/users/account", action: "resend", userId: id })
-        return NextResponse.json({ error: "Could not send confirmation email. Please try again later." }, { status: 400 })
+      if (payload.action === "confirm-email") {
+        const { error } = await auth.service.auth.admin.updateUserById(id, { email_confirm: true })
+        if (error) {
+          logError("Failed to confirm email", error, { component: "admin/users/account", action: "confirm", userId: id })
+          return NextResponse.json({ error: "Could not confirm email. Please try again." }, { status: 400 })
+        }
+      } else {
+        const { error } = await auth.supabase.auth.resend({ type: "signup", email: account.user.email })
+        if (error) {
+          logError("Failed to resend signup confirmation", error, { component: "admin/users/account", action: "resend", userId: id })
+          return NextResponse.json({ error: "Could not send confirmation email. Please try again later." }, { status: 400 })
+        }
       }
     } else if ("password" in payload && typeof payload.password === "string") {
       const { error } = await auth.service.auth.admin.updateUserById(id, { password: payload.password })

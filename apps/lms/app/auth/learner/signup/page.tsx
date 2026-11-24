@@ -103,7 +103,7 @@ export default function UserSignUpPage() {
             <CardHeader>
               <CardTitle>Check your email</CardTitle>
               <CardDescription>
-                If registration was successful, a confirmation email has been sent to {email}. Open it and follow the instructions to finish creating your account.
+                If registration was successful, a confirmation email has been sent to {email}. Open its link, then click the confirmation button on the website to finish creating your account.
               </CardDescription>
             </CardHeader>
             <CardContent>

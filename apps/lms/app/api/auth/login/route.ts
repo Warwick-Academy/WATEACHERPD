@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 401 })
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 401 })
   }
 
   // Verify user type matches

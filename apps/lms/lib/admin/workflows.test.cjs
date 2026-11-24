@@ -127,10 +127,12 @@ test("account actions require admin authorization and use the auth account email
   const request = (body) => ({ headers: new Headers({ "content-type": "application/json" }), json: async () => body })
   db.state.user = null
   assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 401)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 401)
   db.state.user = { id: "caller" }
   db.state.profiles[0].user_type = "user"
   assert.equal((await route.GET({}, context)).status, 403)
   assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 403)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 403)
   assert.deepEqual(calls, [])
   db.state.profiles[0].user_type = "admin"
   assert.deepEqual((await route.GET({}, context)).body, { email: "auth@example.com", emailConfirmed: false })
@@ -141,12 +143,17 @@ test("account actions require admin authorization and use the auth account email
   assert.deepEqual(calls[0], { type: "signup", email: "auth@example.com" })
   assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 200)
   assert.deepEqual(calls[1], { id: "teacher", attributes: { password: "new-password" } })
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 200)
+  assert.deepEqual(calls[2], { id: "teacher", attributes: { email_confirm: true } })
   account = { ...account, email_confirmed_at: "2026-01-01" }
   assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 409)
-  assert.equal(calls.length, 2)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 409)
+  assert.equal(calls.length, 3)
   account = { ...account, email: null, email_confirmed_at: null }
   assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 400)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 400)
   assert.equal((await route.GET({}, { params: Promise.resolve({ id: "missing" }) })).status, 404)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), { params: Promise.resolve({ id: "missing" }) })).status, 404)
 })
 
 test("account actions surface provider and configuration failures", async () => {
@@ -159,8 +166,42 @@ test("account actions surface provider and configuration failures", async () => 
   const request = (body) => ({ headers: new Headers({ "content-type": "application/json" }), json: async () => body })
   assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 400)
   assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 400)
+  assert.equal((await route.POST(request({ action: "confirm-email" }), context)).status, 400)
   db.mocks["@/lib/supabase/server"].createServiceRoleClient = () => { throw new Error("missing service key") }
   assert.equal((await route.GET({}, context)).status, 500)
+})
+
+test("signup confirmation verifies the email token and reports invalid or unavailable links", async () => {
+  const db = mockDatabase()
+  const calls = []
+  let failure = null
+  db.client.auth.verifyOtp = async (attributes) => {
+    calls.push(attributes)
+    return { error: failure }
+  }
+  const route = loadRoute("auth/confirm-email", db.mocks)
+  assert.equal(route.GET, undefined)
+  const request = (body) => ({ json: async () => body })
+  assert.equal((await route.POST(request({ tokenHash: "" }))).status, 400)
+  assert.equal(calls.length, 0)
+  assert.equal((await route.POST(request({ tokenHash: "signup-token" }))).status, 200)
+  assert.deepEqual(calls[0], { token_hash: "signup-token", type: "email" })
+  failure = { status: 403 }
+  assert.equal((await route.POST(request({ tokenHash: "expired-token" }))).status, 400)
+  failure = { status: 503 }
+  assert.equal((await route.POST(request({ tokenHash: "signup-token" }))).status, 503)
+})
+
+test("login exposes an unconfirmed email error for confirmation guidance", async () => {
+  const db = mockDatabase()
+  db.client.auth.signInWithPassword = async () => ({
+    data: { user: null, session: null },
+    error: { message: "Email not confirmed", code: "email_not_confirmed" },
+  })
+  const route = loadRoute("auth/login", db.mocks)
+  const response = await route.POST({ json: async () => ({ email: "a@example.com", password: "password", userType: "user" }) })
+  assert.equal(response.status, 401)
+  assert.equal(response.body.code, "email_not_confirmed")
 })
 
 test("only admins may cancel or restore assignments and completion history survives", async () => {
