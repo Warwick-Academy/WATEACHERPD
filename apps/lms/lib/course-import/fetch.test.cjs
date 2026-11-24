@@ -69,6 +69,16 @@ test("fetcher limits redirects and response size", async () => {
   assert.equal(redirects.requests.length, 4)
   const large = loadFetcher({ responses: [{ chunks: [Buffer.alloc(5 * 1024 * 1024 + 1)] }] })
   await assert.rejects(large.fetchImportUrl("https://example.com"), /5 MB/)
+
+  const largeLesson = loadFetcher({ responses: [{ chunks: [Buffer.alloc(5 * 1024 * 1024 + 1)] }] })
+  assert.equal((await largeLesson.fetchImportUrl("https://example.com", undefined, {
+    maxResponseBytes: 25 * 1024 * 1024,
+  })).body.length, 5 * 1024 * 1024 + 1)
+
+  const oversizedLesson = loadFetcher({ responses: [{ chunks: [Buffer.alloc(25 * 1024 * 1024 + 1)] }] })
+  await assert.rejects(oversizedLesson.fetchImportUrl("https://example.com", undefined, {
+    maxResponseBytes: 25 * 1024 * 1024,
+  }), /25 MB/)
 })
 
 test("source fetches retain their own deadline and respect caller cancellation", async () => {

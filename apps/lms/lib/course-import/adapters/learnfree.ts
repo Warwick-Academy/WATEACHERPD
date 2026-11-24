@@ -3,6 +3,8 @@ import { fetchImportUrl } from "../fetch"
 import { parseSourceHtml, youtubeId } from "./html"
 import type { LessonMaterial, SourceCourse, SourceLesson } from "./types"
 
+const MAX_LEARNFREE_LESSON_RESPONSE_BYTES = 25 * 1024 * 1024
+
 const listSchema = z.object({
   isSuccessful: z.literal(true),
   data: z.object({ lessonData: z.array(z.object({
@@ -62,7 +64,11 @@ export async function readLearnFreeCourse(sourceUrl: string, slug: string, signa
 
 export async function readLearnFreeLesson(slug: string, lesson: SourceLesson, signal?: AbortSignal): Promise<LessonMaterial & { sourceQuiz: boolean }> {
   if (!lesson.sourceId || !/^\d+$/.test(lesson.sourceId)) throw new Error("Invalid LearnFree lesson ID.")
-  const response = await fetchImportUrl(`https://api.one81.com/api/v1/Lesson/GetByCourse/${encodeURIComponent(slug)}?nextLessonId=${lesson.sourceId}`, signal)
+  const response = await fetchImportUrl(
+    `https://api.one81.com/api/v1/Lesson/GetByCourse/${encodeURIComponent(slug)}?nextLessonId=${lesson.sourceId}`,
+    signal,
+    { maxResponseBytes: MAX_LEARNFREE_LESSON_RESPONSE_BYTES },
+  )
   const data = lessonSchema.parse(JSON.parse(response.body)).data.lessonDetails
   const sourceQuiz = data.stepDetails.length > 0 && data.stepDetails.every((step) => step.stepType === 3)
   const html = [data.overviewHtml || "", ...data.stepDetails.map((step) => step.content || "")].join("\n")

@@ -48,13 +48,18 @@ export function validateImportUrl(value: string, allowedDomains = process.env.CO
   return url
 }
 
-export async function fetchImportUrl(value: string, callerSignal?: AbortSignal): Promise<{ url: string; body: string; contentType: string }> {
+export async function fetchImportUrl(
+  value: string,
+  callerSignal?: AbortSignal,
+  options: { maxResponseBytes?: number } = {},
+): Promise<{ url: string; body: string; contentType: string }> {
+  const maxResponseBytes = options.maxResponseBytes ?? 5 * 1024 * 1024
   for (let attempt = 1; ; attempt++) {
     callerSignal?.throwIfAborted()
     const timeout = AbortSignal.timeout(8500)
     const signal = callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout
     try {
-      return await fetchImportUrlOnce(value, signal)
+      return await fetchImportUrlOnce(value, signal, maxResponseBytes)
     } catch (error) {
       if (callerSignal?.aborted || !timeout.aborted) throw error
       if (attempt === 3) throw new Error("Source request timed out after 3 attempts. Resume the import to retry.", { cause: error })
@@ -63,7 +68,11 @@ export async function fetchImportUrl(value: string, callerSignal?: AbortSignal):
   }
 }
 
-async function fetchImportUrlOnce(value: string, signal: AbortSignal): Promise<{ url: string; body: string; contentType: string }> {
+async function fetchImportUrlOnce(
+  value: string,
+  signal: AbortSignal,
+  maxResponseBytes: number,
+): Promise<{ url: string; body: string; contentType: string }> {
   let url = validateImportUrl(value)
   for (let redirects = 0; ; redirects++) {
     signal.throwIfAborted()
@@ -101,7 +110,10 @@ async function fetchImportUrlOnce(value: string, signal: AbortSignal): Promise<{
           for await (const chunk of response) {
             const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
             size += buffer.length
-            if (size > 5 * 1024 * 1024) throw new Error("Source response exceeds the 5 MB limit.")
+            if (size > maxResponseBytes) {
+              const limitMb = maxResponseBytes / (1024 * 1024)
+              throw new Error(`Source response exceeds the ${limitMb} MB limit.`)
+            }
             chunks.push(buffer)
           }
           resolve({ status, body: Buffer.concat(chunks).toString("utf8"), contentType: response.headers["content-type"] || "" })

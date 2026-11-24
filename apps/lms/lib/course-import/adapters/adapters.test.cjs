@@ -82,8 +82,12 @@ test("LearnFree adapter preserves the list and identifies source-only quizzes", 
     ] } } },
     { isSuccessful: true, data: { courseName: "Course", lessonDetails: { stepDetails: [{ stepType: 3, content: "" }] } } },
   ]
+  const requests = []
   const adapter = load("learnfree", {
-    "../fetch": { fetchImportUrl: async () => ({ body: JSON.stringify(responses.shift()) }) },
+    "../fetch": { fetchImportUrl: async (...args) => {
+      requests.push(args)
+      return { body: JSON.stringify(responses.shift()) }
+    } },
     "./html": html,
   })
   assert.equal(adapter.learnFreeSlug("https://www.learnfree.org/series/excel-foundations"), "excel-foundations")
@@ -96,4 +100,8 @@ test("LearnFree adapter preserves the list and identifies source-only quizzes", 
   assert.equal(lesson.sourceQuiz, false)
   assert.deepEqual(lesson.videoIds, ["abcdefghijk"])
   assert.equal((await adapter.readLearnFreeLesson("excel-foundations", course.lessons[1])).sourceQuiz, true)
+  assert.deepEqual(requests.slice(1).map(([, , options]) => options), [
+    { maxResponseBytes: 25 * 1024 * 1024 },
+    { maxResponseBytes: 25 * 1024 * 1024 },
+  ])
 })
