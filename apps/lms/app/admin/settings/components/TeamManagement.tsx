@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useTeamMembers, useCreateTeamMember, useDeleteUser, type TeamMember } from "@/lib/react-query/hooks/useUsers"
 import TableSkeleton from "@/components/TableSkeleton"
+import AccountActions from "@/components/admin/AccountActions"
 
 export default function TeamManagement() {
   const { user, loading: authLoading, userType } = useClientAuthState()
@@ -212,6 +213,7 @@ export default function TeamManagement() {
                   <TableCell>{member.email}</TableCell>
                       <TableCell className="capitalize">{member.user_type}</TableCell>
                   <TableCell>
+                    <AccountActions userId={member.id} name={member.name} />
                     <Button
                       variant="ghost"
                       size="sm"

@@ -28,6 +28,7 @@ import AdminLearnerDetailSkeleton from "@/components/AdminLearnerDetailSkeleton"
 import { useLearner, useRealtimeAdminStats } from "@/lib/react-query/hooks"
 import { usePageSkeleton } from "@/lib/react-query/hooks/useSkeleton"
 import AssignCoursesDialog from "@/components/admin/AssignCoursesDialog"
+import AccountActions from "@/components/admin/AccountActions"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 interface Learner {
@@ -344,6 +345,7 @@ function LearnerDetailsPage() {
                 )}
               </div>
             </div>
+            <AccountActions userId={learner.id} name={learner.name} />
           </div>
         </CardContent>
       </Card>

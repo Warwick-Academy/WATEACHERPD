@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { usePlatformUsers, useDeleteUser, type PlatformUser } from "@/lib/react-query/hooks/useUsers"
 import TableSkeleton from "@/components/TableSkeleton"
+import AccountActions from "@/components/admin/AccountActions"
 
 export default function UserManagement() {
   const { user, loading: authLoading, userType } = useClientAuthState()
@@ -182,6 +183,7 @@ export default function UserManagement() {
                         {new Date(user.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
+                        <AccountActions userId={user.id} name={user.name} />
                         <Button
                           variant="ghost"
                           size="sm"

@@ -106,6 +106,63 @@ test("failed profile update rolls back created auth user", async () => {
   assert.deepEqual(db.state.deleted, ["new-user"])
 })
 
+test("account actions require admin authorization and use the auth account email", async () => {
+  const db = mockDatabase()
+  const calls = []
+  let account = { id: "teacher", email: "auth@example.com", email_confirmed_at: null }
+  db.client.auth.admin.getUserById = async (id) => ({
+    data: { user: id === account.id ? account : null },
+    error: null,
+  })
+  db.client.auth.admin.updateUserById = async (id, attributes) => {
+    calls.push({ id, attributes })
+    return { error: null }
+  }
+  db.client.auth.resend = async (attributes) => {
+    calls.push(attributes)
+    return { error: null }
+  }
+  const route = loadRoute("admin/users/[id]/account", db.mocks)
+  const context = { params: Promise.resolve({ id: "teacher" }) }
+  const request = (body) => ({ headers: new Headers({ "content-type": "application/json" }), json: async () => body })
+  db.state.user = null
+  assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 401)
+  db.state.user = { id: "caller" }
+  db.state.profiles[0].user_type = "user"
+  assert.equal((await route.GET({}, context)).status, 403)
+  assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 403)
+  assert.deepEqual(calls, [])
+  db.state.profiles[0].user_type = "admin"
+  assert.deepEqual((await route.GET({}, context)).body, { email: "auth@example.com", emailConfirmed: false })
+  assert.equal((await route.POST(request({ action: "reset-password", password: "short" }), context)).status, 400)
+  assert.equal((await route.POST(request({ action: "unknown" }), context)).status, 400)
+  assert.equal((await route.POST({ headers: new Headers({ "content-type": "text/plain" }), json: async () => ({ action: "resend-confirmation" }) }, context)).status, 415)
+  assert.equal((await route.POST(request({ action: "resend-confirmation", email: "other@example.com" }), context)).status, 200)
+  assert.deepEqual(calls[0], { type: "signup", email: "auth@example.com" })
+  assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 200)
+  assert.deepEqual(calls[1], { id: "teacher", attributes: { password: "new-password" } })
+  account = { ...account, email_confirmed_at: "2026-01-01" }
+  assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 409)
+  assert.equal(calls.length, 2)
+  account = { ...account, email: null, email_confirmed_at: null }
+  assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 400)
+  assert.equal((await route.GET({}, { params: Promise.resolve({ id: "missing" }) })).status, 404)
+})
+
+test("account actions surface provider and configuration failures", async () => {
+  const db = mockDatabase()
+  db.client.auth.admin.getUserById = async () => ({ data: { user: { id: "teacher", email: "a@example.com", email_confirmed_at: null } }, error: null })
+  db.client.auth.resend = async () => ({ error: new Error("rate limited") })
+  db.client.auth.admin.updateUserById = async () => ({ error: new Error("update failed") })
+  const route = loadRoute("admin/users/[id]/account", db.mocks)
+  const context = { params: Promise.resolve({ id: "teacher" }) }
+  const request = (body) => ({ headers: new Headers({ "content-type": "application/json" }), json: async () => body })
+  assert.equal((await route.POST(request({ action: "resend-confirmation" }), context)).status, 400)
+  assert.equal((await route.POST(request({ action: "reset-password", password: "new-password" }), context)).status, 400)
+  db.mocks["@/lib/supabase/server"].createServiceRoleClient = () => { throw new Error("missing service key") }
+  assert.equal((await route.GET({}, context)).status, 500)
+})
+
 test("only admins may cancel or restore assignments and completion history survives", async () => {
   const db = mockDatabase()
   const route = loadRoute("enrollments", db.mocks)
