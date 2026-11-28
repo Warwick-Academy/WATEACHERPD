@@ -66,8 +66,8 @@ export default function AdminLoginPage() {
       }
       document.cookie = `auth=${encodeURIComponent(JSON.stringify(authData))}; path=/; max-age=86400;`
 
-      // Redirect to the admin dashboard
-      router.push("/admin/dashboard")
+      // Land on the PD platform after break-glass sign-in
+      router.push("/pd")
     } catch (err) {
       setError("An error occurred. Please try again.")
     } finally {

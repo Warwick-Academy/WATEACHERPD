@@ -42,6 +42,7 @@ interface Course {
   section_level?: LessonLevel | null
   preview_video?: string
   totalHours?: number
+  pd_hours?: number | string | null
   totalDurationMinutes?: number
   settings?: {
     enrollment?: {
@@ -527,6 +528,7 @@ export default function CoursePage() {
                   <span>{course.lessons?.length || 0} lessons</span>
                   <span>•</span>
                   <span>{course.totalHours || 0} hours</span>
+                  <span>{Number(course.pd_hours ?? 0)} PD hours</span>
                 </div>
               </div>
             </CardContent>

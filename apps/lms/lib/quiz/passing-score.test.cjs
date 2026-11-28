@@ -17,7 +17,7 @@ function loadTypeScript(name) {
 
 const { getPassingScore } = loadTypeScript("passing-score")
 const { getQuizPercentage, isQuizAnswerCorrect } = loadTypeScript("grading")
-const { hasPassedCourseQuizzes } = loadTypeScript("course-eligibility")
+const { hasPassedCourseQuizzes, hasCompletedCourseLessons } = loadTypeScript("course-eligibility")
 
 test("quiz score overrides course score, with null fallback and zero preserved", () => {
   assert.equal(getPassingScore(80, 50), 80)
@@ -138,4 +138,19 @@ test("completion and certificate eligibility require every enabled quiz to meet 
   assert.equal(await hasPassedCourseQuizzes(mockDatabase(tables), "teacher", 10), false)
   tables.quiz_settings[1].enabled = false
   assert.equal(await hasPassedCourseQuizzes(mockDatabase(tables), "teacher", 10), true)
+})
+
+test("course completion requires every lesson and never treats an empty course as completed", async () => {
+  const tables = {
+    lessons: [{ id: 20, course_id: 10 }, { id: 21, course_id: 10 }],
+    progress: [
+      { user_id: "teacher", course_id: 10, lesson_id: 20, completed: true },
+      { user_id: "teacher", course_id: 10, lesson_id: 21, completed: false },
+      { user_id: "other", course_id: 10, lesson_id: 21, completed: true },
+    ],
+  }
+  assert.equal(await hasCompletedCourseLessons(mockDatabase(tables), "teacher", 10), false)
+  tables.progress[1].completed = true
+  assert.equal(await hasCompletedCourseLessons(mockDatabase(tables), "teacher", 10), true)
+  assert.equal(await hasCompletedCourseLessons(mockDatabase(tables), "teacher", 99), false)
 })

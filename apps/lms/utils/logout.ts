@@ -1,6 +1,6 @@
 "use client"
 
-export async function logout(userType?: "user" | "admin" | "instructor") {
+export async function logout(userType?: "user" | "admin" | "instructor" | "leadership") {
   try {
     // Call the logout API endpoint to sign out from Supabase
     await fetch("/api/auth/logout", {

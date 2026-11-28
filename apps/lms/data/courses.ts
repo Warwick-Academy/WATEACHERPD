@@ -23,6 +23,7 @@ export interface Lesson {
 export interface Module {
   id: number
   section_level?: LessonLevel | null
+  pd_hours?: number | string | null
   title: string
   description: string
   image: string // Supabase Storage URL for course thumbnail

@@ -6,6 +6,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useClientAuthState } from "@/utils/client-auth"
@@ -18,6 +20,8 @@ import {
   DollarSign,
   Palette,
   Award,
+  CalendarDays,
+  Clock,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import TeamManagement from "./components/TeamManagement"
@@ -52,6 +56,10 @@ export default function SettingsPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const initialSettingsRef = useRef<typeof settings | null>(null)
+  const [pdYear, setPdYear] = useState<any>(null)
+  const [pdTarget, setPdTarget] = useState("30")
+  const [pdMaxGoals, setPdMaxGoals] = useState("3")
+  const [pdLoading, setPdLoading] = useState(false)
 
   // Use React Query hooks for data fetching with caching
   const { data: settingsData, isPending: settingsPending, error: settingsError } = useSettings()
@@ -88,6 +96,40 @@ export default function SettingsPage() {
       }
     }
   }, [settingsData])
+
+  useEffect(() => {
+    if (!authLoading && userType === "admin") {
+      setPdLoading(true)
+      fetch("/api/pd/admin/settings", { cache: "no-store" })
+        .then(async (response) => {
+          const body = await response.json()
+          if (!response.ok) throw new Error(body.error || "Failed to load PD settings")
+          setPdYear(body.year)
+          setPdTarget(String(body.settings?.annual_cpd_target_hours ?? 30))
+          setPdMaxGoals(String(body.settings?.max_goals_per_year ?? 3))
+        })
+        .catch((caught) => toast.error(caught instanceof Error ? caught.message : "Failed to load PD settings"))
+        .finally(() => setPdLoading(false))
+    }
+  }, [authLoading, userType])
+
+  const savePdSettings = async () => {
+    try {
+      const response = await fetch("/api/pd/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          annual_cpd_target_hours: pdTarget,
+          max_goals_per_year: pdMaxGoals,
+        }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || "Could not save PD settings")
+      toast.success("CPD and goal settings saved")
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "Could not save PD settings")
+    }
+  }
 
   const handleSwitchChange = (name: string) => (checked: boolean) => {
     setSettings((prev) => ({ ...prev, [name]: checked }))
@@ -158,7 +200,7 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-primary mb-6">Settings</h1>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-muted p-1 rounded-lg w-full grid grid-cols-5 gap-2">
+          <TabsList className="bg-muted p-1 rounded-lg w-full grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               <span>Platform</span>
@@ -178,6 +220,10 @@ export default function SettingsPage() {
             <TabsTrigger value="team" className="flex items-center gap-2">
               <UserCog className="h-4 w-4" />
               <span>Team</span>
+            </TabsTrigger>
+            <TabsTrigger value="pd" className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>CPD &amp; Goals</span>
             </TabsTrigger>
           </TabsList>
 
@@ -329,6 +375,68 @@ export default function SettingsPage() {
           {/* Team Tab - Always mounted, hidden when inactive */}
           <div className={activeTab !== "team" ? "hidden" : ""}>
             <TeamManagement />
+          </div>
+
+          <div className={activeTab !== "pd" ? "hidden" : ""}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Clock className="mr-2 h-5 w-5" /> CPD &amp; Goal Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="rounded-lg border p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    <p className="font-semibold">Current academic year</p>
+                  </div>
+                  {pdLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : (
+                    <>
+                      <p className="font-medium">{pdYear?.name || "Not configured"}</p>
+                      {pdYear && (
+                        <p className="text-sm text-muted-foreground">
+                          {pdYear.start_date} to {pdYear.end_date}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="pd-target">Annual CPD target hours</Label>
+                    <Input
+                      id="pd-target"
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={pdTarget}
+                      onChange={(event) => setPdTarget(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pd-max-goals">Maximum goals per year</Label>
+                    <Input
+                      id="pd-max-goals"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={pdMaxGoals}
+                      onChange={(event) => setPdMaxGoals(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={savePdSettings} disabled={pdLoading}>Save CPD &amp; goals</Button>
+                  <Button variant="outline" onClick={() => router.push("/pd/admin/settings")}>
+                    Manage academic years
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </Tabs>
       </div>

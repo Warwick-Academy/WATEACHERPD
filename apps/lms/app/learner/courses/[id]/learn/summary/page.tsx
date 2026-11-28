@@ -43,7 +43,7 @@ export default function CourseCompletionPage() {
   const params = useParams()
   const slugOrId = params.id as string
   const id = extractIdFromSlug(slugOrId) // Extract actual ID from slug if present
-  const { user, loading: authLoading, userType } = useClientAuthState()
+  const { user, loading: authLoading } = useClientAuthState()
   const { data: courseData, isPending: coursePending, error: courseError } = useCourse(id)
   const { data: enrollmentsData } = useEnrollments()
   const { data: quizResultsData } = useQuizResults(id)
@@ -62,10 +62,10 @@ export default function CourseCompletionPage() {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (!authLoading && (!user || userType !== "user")) {
+    if (!authLoading && !user) {
       router.push("/auth/learner/login")
     }
-  }, [authLoading, user, userType, router])
+  }, [authLoading, user, router])
 
   // Check enrollment and redirect if not enrolled or not completed
   useEffect(() => {

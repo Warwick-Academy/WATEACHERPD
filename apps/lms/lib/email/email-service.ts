@@ -3,7 +3,7 @@
  * Core email sending functionality using SendGrid
  */
 
-import sgMail from "@sendgrid/mail"
+import sgMail, { MailService } from "@sendgrid/mail"
 import { emailTemplates } from "./email-templates"
 import type { EmailData, EmailServiceConfig, SendGridResponse } from "./email-types"
 import { logError, logInfo, logWarning } from "../utils/errorHandler"
@@ -11,8 +11,11 @@ import { createCourseSlug } from "../slug"
 
 // Initialize SendGrid
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
+const pdMail = new MailService()
+pdMail.setTimeout(5000)
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY)
+  pdMail.setApiKey(SENDGRID_API_KEY)
 } else {
   logWarning("SENDGRID_API_KEY not found in environment variables", {
     component: "email-service",
@@ -43,6 +46,7 @@ class EmailService {
       return {
         success: false,
         error,
+        failureKind: "definite",
       }
     }
 
@@ -58,6 +62,7 @@ class EmailService {
         return {
           success: false,
           error,
+          failureKind: "definite",
         }
       }
 
@@ -76,48 +81,51 @@ class EmailService {
         to: emailData.to,
         from: {
           email: emailConfig.fromEmail,
-          name: emailConfig.fromName,
+          name: emailData.template === "pdNotice" ? "Warwick Academy" : emailConfig.fromName,
         },
-        replyTo: emailConfig.replyTo,
+        replyTo: emailData.template === "pdNotice" ? process.env.SENDGRID_REPLY_TO : emailConfig.replyTo,
         subject,
         html: htmlContent,
         text: textContent,
       }
 
-      logInfo("Sending email", {
-        component: "email-service",
-        action: "sendEmail",
-        to: emailData.to,
-        template: emailData.template,
-        subject,
-      })
+      logInfo("Sending email", emailData.template === "pdNotice"
+        ? { component: "email-service", action: "sendEmail", template: emailData.template }
+        : { component: "email-service", action: "sendEmail", to: emailData.to, template: emailData.template, subject })
 
-      const [response] = await sgMail.send(msg)
+      const [response] = await (emailData.template === "pdNotice" ? pdMail : sgMail).send(msg)
 
-      logInfo("Email sent successfully", {
-        component: "email-service",
-        action: "sendEmail",
-        to: emailData.to,
-        template: emailData.template,
-        messageId: response.headers["x-message-id"],
-      })
+      logInfo("Email sent successfully", emailData.template === "pdNotice"
+        ? { component: "email-service", action: "sendEmail", template: emailData.template }
+        : { component: "email-service", action: "sendEmail", to: emailData.to, template: emailData.template, messageId: response.headers["x-message-id"] })
 
       return {
         success: true,
         messageId: response.headers["x-message-id"] as string,
       }
     } catch (error: any) {
-      logError("Failed to send email", error, {
-        component: "email-service",
-        action: "sendEmail",
-        to: emailData.to,
-        template: emailData.template,
-        errorMessage: error?.message,
-      })
+      if (emailData.template === "pdNotice") {
+        logError("Failed to send PD email", new Error("SendGrid request failed"), {
+          component: "email-service",
+          action: "sendEmail",
+          status: typeof error?.code === "number" ? error.code : undefined,
+        })
+      } else {
+        logError("Failed to send email", error, {
+          component: "email-service",
+          action: "sendEmail",
+          to: emailData.to,
+          template: emailData.template,
+          errorMessage: error?.message,
+        })
+      }
 
       return {
         success: false,
         error: error?.message || "Unknown error occurred",
+        failureKind: typeof error?.code === "number" && error.code >= 400 && error.code < 500 && error.code !== 408
+          ? "definite"
+          : "uncertain",
       }
     }
   }

@@ -23,6 +23,7 @@ import { US } from "country-flag-icons/react/3x2"
 import { useProfile, useUpdateProfile, useSettings } from "@/lib/react-query/hooks"
 import { useRealtimeProfile } from "@/lib/react-query/hooks/useRealtime"
 import { toast } from "sonner"
+import { PdReminderSettings } from "@/components/PdReminderSettings"
 
 const NigeriaFlag = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6 3" className="w-4 h-4 mr-2">
@@ -65,7 +66,7 @@ export default function LearnerProfilePage() {
 
   useEffect(() => {
     if (!authLoading) {
-      if (!authUser || userType !== "user") {
+      if (!authUser || !["user", "leadership", "instructor"].includes(userType ?? "")) {
         router.push("/auth/learner/login")
         return
       }
@@ -247,7 +248,7 @@ export default function LearnerProfilePage() {
   // Show skeleton ONLY on true initial load (no cached data exists)
   // Once we have data, never show skeleton again (even during refetches)
   const hasData = !!profile
-  const showSkeleton = (authLoading || !authUser || userType !== "user" || profilePending) && !hasData
+  const showSkeleton = (authLoading || !authUser || !["user", "leadership", "instructor"].includes(userType ?? "") || profilePending) && !hasData
 
   return (
     <div className="pt-4 md:pt-8 pb-[30px] md:pb-8 px-4 lg:px-6">
@@ -500,6 +501,7 @@ export default function LearnerProfilePage() {
 
         <TabsContent value="settings" className="mt-4 md:mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            <PdReminderSettings userId={authUser?.id} />
             <Card>
               <CardHeader className="p-4 md:p-6">
                 <CardTitle className="flex items-center text-lg md:text-xl">

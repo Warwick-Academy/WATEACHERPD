@@ -45,6 +45,13 @@ export async function POST(request: Request) {
     if (!courseData) {
       return NextResponse.json({ error: "Course data is required" }, { status: 400 })
     }
+    const pdHours = courseData.basicInfo?.pdHours
+    if (pdHours !== undefined && (
+      (typeof pdHours !== "string" && typeof pdHours !== "number") ||
+      !/^\d+(?:\.\d{1,2})?$/.test(String(pdHours)) || Number(pdHours) > 100
+    )) {
+      return NextResponse.json({ error: "PD hours must be from 0 to 100, with up to two decimal places" }, { status: 400 })
+    }
 
     for (const lesson of courseData.lessons || []) {
       if (lesson.levels !== undefined && !isLessonLevelArray(lesson.levels)) {
@@ -122,6 +129,7 @@ export async function POST(request: Request) {
       certificate_type: certificate.certificateType || null,
       updated_at: new Date().toISOString(),
     }
+    if (pdHours !== undefined) dbCourseData.pd_hours = Number(pdHours)
     
     // Only include created_by for new courses (not updates)
     if (!courseId || courseId === "new") {

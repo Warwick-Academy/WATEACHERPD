@@ -44,3 +44,6 @@ next-env.d.ts
 apps/*/.next/
 apps/*/out/
 apps/*/node_modules/
+
+# Local Netlify folder
+.netlify

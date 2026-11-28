@@ -1,4 +1,4 @@
--- Run against an isolated database, or with a privileged connection; all fixtures are rolled back.
+-- Run after the PD migrations through 20261127f against an isolated database or privileged connection; fixtures are rolled back.
 BEGIN;
 
 INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -17,38 +17,45 @@ $$;
 UPDATE public.profiles SET user_type = 'admin' WHERE id = '31d5e0bb-fc78-4980-a969-1097e27cb102';
 INSERT INTO public.courses (id, title, description) VALUES (-2147483601, 'Policy test', 'Policy test');
 INSERT INTO public.lessons (id, course_id, title, type, order_index)
-VALUES (-2147483601, -2147483601, 'Policy test', 'text', 0);
+VALUES (-2147483601, -2147483601, 'Policy test', 'text', 0),
+       (-2147483602, -2147483601, 'Policy test 2', 'text', 1);
+INSERT INTO public.progress (user_id, course_id, lesson_id)
+VALUES ('31d5e0bb-fc78-4980-a969-1097e27cb101', -2147483601, -2147483601);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '31d5e0bb-fc78-4980-a969-1097e27cb101', true);
 
 DO $$
-DECLARE visible_count integer;
+DECLARE denied boolean;
 BEGIN
-  SELECT count(*) INTO visible_count FROM public.profiles;
-  IF visible_count <> 1 THEN
-    RAISE EXCEPTION 'Learner must see only their own profile; saw %', visible_count;
+  IF (SELECT count(*) FROM public.profiles WHERE id IN ('31d5e0bb-fc78-4980-a969-1097e27cb101', '31d5e0bb-fc78-4980-a969-1097e27cb102')) <> 2 THEN
+    RAISE EXCEPTION 'Learner could not see both staff directory profiles';
   END IF;
   PERFORM count(*) FROM public.courses;
   PERFORM count(*) FROM public.enrollments;
   UPDATE public.profiles SET name = 'Updated learner' WHERE id = auth.uid();
   IF NOT FOUND THEN RAISE EXCEPTION 'Learner could not update their own profile'; END IF;
+  denied := false;
   BEGIN
     UPDATE public.profiles SET user_type = 'admin' WHERE id = auth.uid();
-    RAISE EXCEPTION 'Learner was able to grant themselves admin access';
-  EXCEPTION WHEN insufficient_privilege THEN
-    NULL;
+  EXCEPTION WHEN insufficient_privilege OR raise_exception THEN
+    denied := true;
   END;
-  INSERT INTO public.progress (user_id, course_id, lesson_id)
-    VALUES (auth.uid(), -2147483601, -2147483601);
-  UPDATE public.progress SET completed = true WHERE user_id = auth.uid();
-  IF NOT FOUND OR NOT (SELECT completed FROM public.progress WHERE user_id = auth.uid()) THEN
-    RAISE EXCEPTION 'Learner could not read and update their own progress';
+  IF NOT denied THEN RAISE EXCEPTION 'Learner was able to grant themselves admin access'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.progress WHERE user_id = auth.uid() AND lesson_id = -2147483601) THEN
+    RAISE EXCEPTION 'Learner could not read their own progress';
   END IF;
+  denied := false;
   BEGIN
     INSERT INTO public.progress (user_id, course_id, lesson_id)
-      VALUES ('31d5e0bb-fc78-4980-a969-1097e27cb102', -2147483601, -2147483601);
-    RAISE EXCEPTION 'Learner was able to create another user''s progress';
+      VALUES (auth.uid(), -2147483601, -2147483602);
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'Learner was able to insert progress directly'; END IF;
+  BEGIN
+    UPDATE public.progress SET completed = true WHERE user_id = auth.uid() AND lesson_id = -2147483601;
+    IF FOUND THEN RAISE EXCEPTION 'Learner was able to update progress directly'; END IF;
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;

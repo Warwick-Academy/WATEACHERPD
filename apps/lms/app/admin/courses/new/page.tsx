@@ -28,6 +28,7 @@ function NewCourseContent() {
       thumbnail: string
       previewVideo: string
       price: string
+      pdHours: string
     }
     lessons: any[]
     settings: {
@@ -67,6 +68,7 @@ function NewCourseContent() {
       thumbnail: "",
       previewVideo: "",
       price: "",
+      pdHours: "0",
     },
     lessons: [],
     settings: {
@@ -215,6 +217,7 @@ function NewCourseContent() {
                   thumbnail: (course.image && course.image.trim() !== "") ? course.image.trim() : (course.thumbnail && course.thumbnail.trim() !== "" ? course.thumbnail.trim() : ""), // Schema uses 'image', map to 'thumbnail'
                   previewVideo: (course.preview_video && course.preview_video.trim() !== "") ? course.preview_video.trim() : "",
                   price: course.price?.toString() || "",
+                  pdHours: String(course.pd_hours ?? 0),
                 },
                 lessons: (course.lessons || []).map((lesson: any) => {
                   // The API already transforms lessons to frontend format, but we need to ensure

@@ -126,6 +126,7 @@ export interface SendGridResponse {
   success: boolean
   messageId?: string
   error?: string
+  failureKind?: "definite" | "uncertain"
 }
 
 // Brand settings for emails

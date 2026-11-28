@@ -238,6 +238,7 @@ export function useAutoSave<T>({
         thumbnail: dbCourse.image && dbCourse.image.trim() !== "" ? dbCourse.image.trim() : "", // Schema uses 'image', map back to 'thumbnail'
         previewVideo: dbCourse.preview_video && dbCourse.preview_video.trim() !== "" ? dbCourse.preview_video.trim() : "",
         price: dbCourse.price?.toString() || "",
+        pdHours: String(dbCourse.pd_hours ?? 0),
       },
       lessons: (dbCourse.lessons || []).map((lesson: any) => {
         const content = lesson.content || {}

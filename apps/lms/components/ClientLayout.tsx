@@ -16,6 +16,7 @@ import { ErrorBoundary } from "./ErrorBoundary"
 import DynamicTitle from "./DynamicTitle"
 import DynamicFavicon from "./DynamicFavicon"
 import { useQueryClient } from "@tanstack/react-query"
+import { usePdContext } from "@/lib/pd/context-client"
 
 export default function ClientLayout({
   children,
@@ -25,6 +26,7 @@ export default function ClientLayout({
   initialSettingsData?: { platformSettings: any }
 }) {
   const pathname = usePathname()
+  const pdContext = usePdContext()
   
   // Use the hook for Supabase auth if configured, otherwise use state
   const supabaseAuthState = useClientAuthState()
@@ -279,7 +281,7 @@ export default function ClientLayout({
 
   // Memoize derived values to prevent unnecessary re-renders
   const derivedLayoutValues = useMemo(() => {
-    const isProtectedRoute = pathname.startsWith('/admin/') || pathname.startsWith('/learner/')
+    const isProtectedRoute = pathname.startsWith('/admin/') || pathname.startsWith('/learner/') || pathname.startsWith('/pd')
     const isAuthPage = [
       "/auth/learner/login",
       "/auth/learner/signup",
@@ -294,8 +296,8 @@ export default function ClientLayout({
     const shouldShowLayout = isProtectedRoute && !isAuthPage
 
     // Derive userType from pathname if auth state not ready yet
-    const derivedUserType: "user" | "admin" | "instructor" = userType
-      ? (userType as "user" | "admin" | "instructor")
+    const derivedUserType: "user" | "admin" | "instructor" | "leadership" = userType
+      ? (userType as "user" | "admin" | "instructor" | "leadership")
       : pathname.startsWith('/admin/')
         ? "admin"
         : "user"
@@ -315,23 +317,31 @@ export default function ClientLayout({
             {shouldShowLayout ? (
               <div className="flex flex-col h-screen">
                 <div className="lg:hidden">
-                  <MobileMenu userType={derivedUserType} user={user} />
+                  <MobileMenu
+                    userType={derivedUserType}
+                    user={user}
+                    isLeadership={pdContext.isLeadership}
+                    isFeedbackLeader={pdContext.isFeedbackLeader}
+                  />
                 </div>
-                <div className="hidden lg:flex h-screen">
-                  <LeftSidebar userType={derivedUserType} />
-                  <div className="flex flex-col flex-grow lg:ml-64">
-                    <Header isLoggedIn={isLoggedIn} userType={derivedUserType === "instructor" ? "admin" : derivedUserType} user={user} />
-                    <div className="flex-grow lg:pt-16 pb-8">
-                      <main className="container-fluid">
-                        {children}
-                      </main>
-                    </div>
+                <LeftSidebar
+                  userType={derivedUserType}
+                  isLeadership={pdContext.isLeadership}
+                  isFeedbackLeader={pdContext.isFeedbackLeader}
+                />
+                <div className="flex flex-col flex-grow lg:ml-64">
+                  <div className="hidden lg:block">
+                    <Header
+                      isLoggedIn={isLoggedIn}
+                      userType={derivedUserType === "instructor" || derivedUserType === "leadership" ? "admin" : derivedUserType}
+                      user={user}
+                    />
                   </div>
-                </div>
-                <div className="lg:hidden flex-grow mt-16 mb-[30px] pb-[30px]">
-                  <main className="container-fluid">
-                    {children}
-                  </main>
+                  <div className="flex-grow mt-16 mb-[30px] pb-[30px] lg:mt-0 lg:mb-0 lg:pt-16 lg:pb-8">
+                    <main className="container-fluid">
+                      {children}
+                    </main>
+                  </div>
                 </div>
               </div>
             ) : (

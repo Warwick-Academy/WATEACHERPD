@@ -52,8 +52,7 @@ export async function updateSession(request: NextRequest) {
   if (
     !user &&
     !isPublicPath &&
-    !request.nextUrl.pathname.startsWith('/api') &&
-    request.nextUrl.pathname !== '/'
+    !request.nextUrl.pathname.startsWith('/api')
   ) {
     // No active session - redirect to appropriate login page based on route
     const url = request.nextUrl.clone()
@@ -127,6 +126,11 @@ export async function updateSession(request: NextRequest) {
       return supabaseResponse
     }
 
+    if (request.nextUrl.pathname === '/') {
+      url.pathname = '/pd'
+      return NextResponse.redirect(url)
+    }
+
     // If trying to access auth pages, redirect to appropriate dashboard
     if (request.nextUrl.pathname.startsWith('/auth')) {
       // Prevent admins from accessing learner auth pages
@@ -143,9 +147,9 @@ export async function updateSession(request: NextRequest) {
       
       // If already logged in and accessing correct auth page, redirect to dashboard
       if (userType === 'admin') {
-        url.pathname = '/admin/dashboard'
+        url.pathname = '/pd'
       } else {
-        url.pathname = '/learner/dashboard'
+        url.pathname = '/pd'
       }
       return NextResponse.redirect(url)
     }
@@ -155,6 +159,17 @@ export async function updateSession(request: NextRequest) {
       // Non-admin trying to access admin route, redirect to admin login
       url.pathname = '/auth/admin/login'
       return NextResponse.redirect(url)
+    }
+
+    if (request.nextUrl.pathname.startsWith('/pd/admin') &&
+        userType !== 'admin' &&
+        !(userType === 'leadership' && request.nextUrl.pathname.startsWith('/pd/admin/reports'))) {
+      url.pathname = '/pd'
+      return NextResponse.redirect(url)
+    }
+
+    if (request.nextUrl.pathname.startsWith('/pd')) {
+      return supabaseResponse
     }
 
     // Protect learner routes - only learners can access (admins can also access learner routes if needed)

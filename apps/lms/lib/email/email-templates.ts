@@ -643,6 +643,16 @@ Need help? Contact us at support@easelms.org
 
 // Export all templates
 export const emailTemplates: Record<string, EmailTemplate> = {
+  pdNotice: {
+    subject: (data: { subject: string }) => data.subject,
+    html: (data: { message: string; url: string }) => `
+      <!doctype html><html><body>
+      <p>${data.message}</p>
+      <p><a href="${data.url}" style="display:inline-block;padding:12px 20px;background:#17375e;color:#fff;text-decoration:none;border-radius:4px">Open Professional Development</a></p>
+      <p>Warwick Academy Professional Development</p>
+      </body></html>`,
+    text: (data: { message: string; url: string }) => `${data.message}\n\nOpen Professional Development: ${data.url}`,
+  },
   welcome: welcomeTemplate,
   passwordReset: passwordResetTemplate,
   emailConfirmation: emailConfirmationTemplate,
