@@ -18,7 +18,7 @@ import { usePageSkeleton } from "@/lib/react-query/hooks/useSkeleton"
 
 export default function CoursesPage() {
   const router = useRouter()
-  const { user, loading: authLoading, userType } = useClientAuthState()
+  const { user, loading: authLoading } = useClientAuthState()
   const [dashboardUser, setDashboardUser] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState("relevance")
@@ -76,13 +76,13 @@ export default function CoursesPage() {
 
   useEffect(() => {
     if (!authLoading) {
-      if (!user || userType !== "user") {
+      if (!user) {
         router.push("/auth/learner/login")
       } else {
         setDashboardUser(user as User)
       }
     }
-  }, [user, userType, authLoading, router])
+  }, [user, authLoading, router])
 
   // Use unified skeleton logic - show skeleton only on first load with no cached data
   const showSkeleton = usePageSkeleton(authLoading, !!dashboardUser, [coursesData, enrollmentsData])

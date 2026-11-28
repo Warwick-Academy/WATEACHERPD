@@ -21,6 +21,7 @@ interface CourseBasicInfoProps {
     thumbnail: string
     previewVideo: string
     price: string
+    pdHours: string
   }
   onUpdate: (data: any) => void
   courseId?: string | number
@@ -117,6 +118,15 @@ export default function CourseBasicInfo({ data, onUpdate, courseId }: CourseBasi
           onChange={handleInputChange}
           placeholder="Enter course title"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="pdHours">PD hours awarded on completion</Label>
+        <Input id="pdHours" name="pdHours" type="number" min="0" max="100" step="0.01"
+          value={data.pdHours ?? ""} onChange={handleInputChange} aria-describedby="pd-hours-help" />
+        <p id="pd-hours-help" className="text-sm text-muted-foreground">Enter a number from 0 to 100, with up to two decimal places.</p>
+        {data.pdHours !== undefined && (!/^\d+(?:\.\d{1,2})?$/.test(data.pdHours) || Number(data.pdHours) > 100) &&
+          <p role="alert" className="text-sm text-destructive">Enter PD hours from 0 to 100, with up to two decimal places.</p>}
       </div>
 
       <div className="space-y-2">

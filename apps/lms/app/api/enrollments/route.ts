@@ -1,7 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { logError, logWarning, logInfo, createErrorResponse } from "@/lib/utils/errorHandler"
-import { hasPassedCourseQuizzes } from "@/lib/quiz/course-eligibility"
+import { hasCompletedCourseLessons, hasPassedCourseQuizzes } from "@/lib/quiz/course-eligibility"
 
 async function updateEnrollmentCount(client: ReturnType<typeof createServiceRoleClient>, courseId: number) {
   const { count, error } = await client.from("enrollments")
@@ -395,19 +395,26 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "This assignment was cancelled. Contact an administrator." }, { status: 403 })
   }
 
+  if (status === "completed" && existingEnrollment.status === "completed") {
+    return NextResponse.json({ enrollment: existingEnrollment })
+  }
+
   if (status === "completed" && existingEnrollment.status !== "completed") {
     try {
-      if (!await hasPassedCourseQuizzes(serviceSupabase, user.id, Number(courseId))) {
+      if (!await hasCompletedCourseLessons(serviceSupabase, targetUserId, Number(courseId))) {
+        return NextResponse.json({ error: "Complete every lesson before completing this course" }, { status: 400 })
+      }
+      if (!await hasPassedCourseQuizzes(serviceSupabase, targetUserId, Number(courseId))) {
         return NextResponse.json({ error: "Pass all course quizzes before completing this course" }, { status: 400 })
       }
     } catch (error) {
-      logError("Error checking course quiz results", error, {
+      logError("Error checking course completion", error, {
         component: "enrollments/route",
         action: "PATCH",
         userId: user.id,
         courseId,
       })
-      return NextResponse.json({ error: "Could not verify quiz results" }, { status: 500 })
+      return NextResponse.json({ error: "Could not verify course completion" }, { status: 500 })
     }
   }
 

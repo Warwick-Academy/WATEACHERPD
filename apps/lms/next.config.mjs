@@ -19,6 +19,14 @@ const nextConfig = {
       './node_modules/pdfkit/js/data/**/*.afm',
       '../../node_modules/pdfkit/js/data/**/*.afm',
     ],
+    '/api/pd/portfolio': [
+      './public/brand/crest-transparent.png',
+      './apps/lms/public/brand/crest-transparent.png',
+      './lib/certificates/fonts/**/*.afm',
+      './apps/lms/lib/certificates/fonts/**/*.afm',
+      './node_modules/pdfkit/js/data/**/*.afm',
+      '../../node_modules/pdfkit/js/data/**/*.afm',
+    ],
   },
   async headers() {
     return [

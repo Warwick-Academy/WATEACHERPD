@@ -12,6 +12,9 @@ import {
   User,
   Settings,
   LogOut,
+  Target,
+  ClipboardCheck,
+  Clock,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Logo from "./Logo"
@@ -21,7 +24,9 @@ import CopyrightText from "./CopyrightText"
 import Indicator from "./Indicator"
 
 interface LeftSidebarProps {
-  userType: "user" | "admin" | "instructor"
+  userType: "user" | "admin" | "instructor" | "leadership"
+  isLeadership?: boolean
+  isFeedbackLeader?: boolean
 }
 
 interface MenuItem {
@@ -32,23 +37,33 @@ interface MenuItem {
   isLogout?: boolean
 }
 
-export default function LeftSidebar({ userType }: LeftSidebarProps) {
+export default function LeftSidebar({ userType, isLeadership = false, isFeedbackLeader = false }: LeftSidebarProps) {
   const pathname = usePathname()
 
   // Build admin/instructor menu items
-  const adminMenuItems: MenuItem[] = [
-    { href: "/admin/dashboard", icon: Home, label: "Dashboard" },
-    { href: "/admin/courses", icon: BookOpen, label: "Courses" },
-    { href: "/admin/learners", icon: Users, label: "Learners" },
+  const menuItems: MenuItem[] = [
+    { href: "/pd", icon: Home, label: "My PD" },
+    { href: "/pd/goals", icon: Target, label: "My Goals" },
+    { href: "/pd/observations", icon: ClipboardCheck, label: "Observations" },
+    { href: "/pd/cpd", icon: Clock, label: "CPD Log" },
+    { href: "/learner/courses", icon: BookOpen, label: "Training Courses" },
   ]
 
-  const menuItems: Record<LeftSidebarProps["userType"], MenuItem[]> = {
-    user: [
-      { href: "/learner/dashboard", icon: Home, label: "Dashboard" },
-      { href: "/learner/courses", icon: BookOpen, label: "Courses" },
-    ],
-    admin: adminMenuItems,
-    instructor: adminMenuItems,
+  if (isFeedbackLeader || userType === "admin") menuItems.push({ href: "/pd/team", icon: Users, label: "My Team" })
+
+  if (userType === "admin") {
+    menuItems.push(
+      { href: "/pd/admin/staff", icon: Users, label: "Staff" },
+      { href: "/pd/admin/leaders", icon: Users, label: "Feedback Leaders" },
+      { href: "/pd/admin/school-goals", icon: Target, label: "School Goals" },
+      { href: "/pd/admin/forms", icon: ClipboardCheck, label: "Observation Forms" },
+      { href: "/pd/admin/cpd", icon: Clock, label: "Bulk CPD" },
+      { href: "/pd/admin/reports", icon: BarChart, label: "Reports" },
+      { href: "/pd/admin/settings", icon: Settings, label: "Years & Settings" },
+      { href: "/admin/courses", icon: BookOpen, label: "Training admin" },
+    )
+  } else if (isLeadership) {
+    menuItems.push({ href: "/pd/admin/reports", icon: BarChart, label: "Reports" })
   }
 
   const bottomMenuItems: Record<"user" | "admin", MenuItem[]> = {
@@ -58,13 +73,13 @@ export default function LeftSidebar({ userType }: LeftSidebarProps) {
     ],
     admin: [
       { href: "/admin/profile", icon: User, label: "Profile" },
-      { href: "/admin/settings", icon: Settings, label: "Settings" },
+      { href: "/admin/settings", icon: Settings, label: "Training Settings" },
       { href: "#", icon: LogOut, label: "Log Out", isLogout: true },
     ],
   }
 
-  const currentMenu = menuItems[userType] || menuItems.admin
-  const currentBottomMenu = bottomMenuItems[userType === "user" ? "user" : "admin"]
+  const currentMenu = menuItems
+  const currentBottomMenu = bottomMenuItems[userType === "admin" ? "admin" : "user"]
 
   return (
     <div className="w-64 h-screen py-4 flex-col fixed left-0 top-0 bg-background-element border-r border-border hidden lg:flex">

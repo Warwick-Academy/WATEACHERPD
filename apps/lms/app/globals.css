@@ -5,24 +5,24 @@
 @layer base {
   :root {
     /* Warwick Academy brand: navy #17406E, light blue #AACFE9 */
-    --background: 0 0% 100%;
+    --background: 212 45% 87%;
     --foreground: 212 50% 14%;
-    --card: 0 0% 100%;
+    --card: 212 45% 82%;
     --card-foreground: 212 50% 14%;
-    --popover: 0 0% 100%;
+    --popover: 212 45% 82%;
     --popover-foreground: 212 50% 14%;
     --primary: 212 65.4% 26.1%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 205 58.9% 93%;
+    --secondary: 212 42% 78%;
     --secondary-foreground: 212 65.4% 26.1%;
-    --muted: 210 30% 96%;
-    --muted-foreground: 212 15% 42%;
-    --accent: 205 58.9% 90%;
+    --muted: 212 35% 82%;
+    --muted-foreground: 212 24% 30%;
+    --accent: 212 42% 75%;
     --accent-foreground: 212 65.4% 26.1%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 210 25% 88%;
-    --input: 210 25% 88%;
+    --border: 212 28% 68%;
+    --input: 212 28% 68%;
     --ring: 212 65.4% 26.1%;
     --radius: 0.5rem;
   }

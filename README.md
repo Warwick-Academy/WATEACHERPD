@@ -265,6 +265,36 @@ EaseLMS is a modern, open-source Learning Management System built with Next.js, 
       - Each draft copies the saved lessons, quizzes and linked resources, retains the original enrollment settings, and has its own calculated PD credit and certificate. Review each draft and publish it when ready.
       - Keep the page open while each section's preview is recorded and uploaded. If media generation fails or the page is refreshed, return to the split page and resume; drafts already created are retained.
 
+   l. **Enable PD goals**
+      - Apply `apps/lms/supabase/migrations/20261127_pd_module.sql`, then `20261127b_pd_goals_fix.sql`, `20261127c_pd_goal_link_fix.sql`, `20261127d_pd_observation_fix.sql`, `20261127e_pd_observation_fix2.sql`, `20261127f_pd_training_evidence_fix.sql`, `20261127g_pd_trends_by_teacher.sql`, `20261128a_pd_reminder_log.sql`, `20261128b_pd_notification_outbox.sql`, `20261128c_pd_dispatch_token.sql` and `20261128d_pd_outbox_reopen_fix.sql` in that order, before deploying the matching application code.
+      - Staff can manage their goals and see linked evidence under **My Goals**. Feedback Leaders can select assigned staff there and add progress updates. Earlier years are read-only except for admins.
+      - Leadership staff can manage their own current-year goals and view other staff goals without editing them.
+      - Admins manage the current year's school goals under **School Goals**. The goal limit is configured under **Years & Settings**.
+      - The optional **Check it's SMART** feature uses the existing `ANTHROPIC_API_KEY` and `AI_QUIZ_MODEL` settings. Only the goal description is sent to Anthropic; remove names and confidential information before using it. Suggestions do not change the goal.
+
+   m. **Use observations**
+      - Start a Learning Walk, appraisal or self-reflection from **Observations**. Drafts autosave and are visible only to their writer; wait for **Saved** before leaving. Published observations can be acknowledged or signed by the appropriate participants.
+      - Admins configure categories and criteria under **Observation Forms**. Reopening a published observation returns it to its observer as a private draft; only the observer can edit or delete that draft.
+
+   n. **Use the CPD log and Training**
+      - Add manual entries and optional PDF, PNG, JPG or DOCX evidence (up to 10 MB) under **CPD Log**. The activity date determines the academic year; dates outside configured years use the current year. Evidence opens with a signed URL; Feedback Leader access follows the assignment for that entry's year.
+      - Link entries to your current-year goals. Training and school-added entries cannot be edited or deleted by staff. Admins can add CPD to selected staff or remove a batch under **Bulk CPD**.
+      - Your CPD log separately lists your current in-progress Training Courses across all years; they do not count toward CPD hours until completion.
+      - Set **PD hours awarded on completion** to 0–100 in the course editor. Training completion requires all lessons and quizzes to pass. The database awards eligible hours to the CPD log; an award failure is logged as a database warning and does not block completion.
+
+   o. **Use dashboards and reports**
+      - **My PD** shows current-year goals, CPD, observation actions, target dates and Training. Feedback Leaders can use **My Team** to see assigned staff and comment on their goals.
+      - Admins and leadership can filter **Reports** by year, department and phase and export each report to CSV. Criteria trends are summed from the RLS-protected per-teacher view.
+      - Download a year portfolio from **My PD**, **My Team**, or the selected person and year in **CPD Log**. Portfolios include published observations, not drafts, and are limited to records the signed-in user may see.
+      - On **Staff**, open a profile and choose **Preview account** for a read-only current-year summary. It uses the administrator's existing access, excludes private observation drafts and does not switch accounts or reproduce the user's exact permissions.
+
+   n. **Configure PD email**
+      - Set `SENDGRID_API_KEY`, a verified Warwick Academy `SENDGRID_FROM_EMAIL`, and the public HTTPS `NEXT_PUBLIC_APP_URL` in Netlify's Functions environment and locally for testing. Set `SUPABASE_SERVICE_ROLE_KEY` only on the server. Set the same cryptographically random `PD_DISPATCH_TOKEN` in the server environment and with `pd_set_dispatch_token` in the Supabase SQL editor; never commit or share it.
+      - Essential observation and appraisal notices are queued by the database and dispatched one at a time using the actor's signed-in session. The scheduled job recovers pending and definite failed notices. Reopening cancels pending and failed notices for the previous publication; an email already claimed for sending may still be delivered. Only the first teacher response per publication triggers a notice.
+      - The root `netlify.toml` points Netlify to the LMS functions directory. The `pd-notifications` Scheduled Function runs daily at 12:00 UTC. It uses the service role only for the notification job. Goal reminders are sent once per target date when due within 14 days; observation reminders are sent after seven days without acknowledgement. Staff can turn reminders off in Profile; essential emails ignore this preference.
+      - Delivery uses an at-most-once policy: a SendGrid acceptance is recorded as sent, definite failures are retried up to three times, and unknown outcomes or expired claims are marked uncertain and not resent automatically. Monitor the function logs and `pd_reminder_log` / `pd_notification_outbox` for failed or uncertain entries. SendGrid acceptance does not guarantee inbox delivery. Scheduled functions run automatically only on published deployments; use Netlify's **Run now** to test a deploy preview.
+      - The scheduled function has a 30-second Netlify limit and leaves remaining work for a later run when its processing budget is reached. Confirm the function appears as scheduled after deployment and monitor any backlog.
+
 5. **Start the development server**
    ```bash
    npm run dev

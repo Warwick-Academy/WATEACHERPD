@@ -5,7 +5,8 @@ import { getPassingScore } from "./passing-score"
 export async function hasPassedCourseQuizzes(
   supabase: SupabaseClient,
   userId: string,
-  courseId: number
+  courseId: number,
+  onlyLessonId?: number,
 ): Promise<boolean> {
   const { data: course, error: courseError } = await supabase
     .from("courses")
@@ -14,13 +15,15 @@ export async function hasPassedCourseQuizzes(
     .single()
   if (courseError) throw courseError
 
-  const { data: lessons, error: lessonsError } = await supabase
+  let lessonsQuery = supabase
     .from("lessons")
     .select("id")
     .eq("course_id", courseId)
+  if (onlyLessonId !== undefined) lessonsQuery = lessonsQuery.eq("id", onlyLessonId)
+  const { data: lessons, error: lessonsError } = await lessonsQuery
   if (lessonsError) throw lessonsError
   const lessonIds = lessons.map((lesson) => lesson.id)
-  if (lessonIds.length === 0) return true
+  if (lessonIds.length === 0) return onlyLessonId === undefined
 
   const [settingsResponse, questionsResponse, resultsResponse] = await Promise.all([
     supabase.from("quiz_settings").select("lesson_id, enabled, passing_score").in("lesson_id", lessonIds),
@@ -43,4 +46,19 @@ export async function hasPassedCourseQuizzes(
     if (score === null || score < passingScore) return false
   }
   return true
+}
+
+export async function hasCompletedCourseLessons(
+  supabase: SupabaseClient,
+  userId: string,
+  courseId: number,
+): Promise<boolean> {
+  const [lessons, progress] = await Promise.all([
+    supabase.from("lessons").select("id").eq("course_id", courseId),
+    supabase.from("progress").select("lesson_id").eq("user_id", userId).eq("course_id", courseId).eq("completed", true),
+  ])
+  if (lessons.error) throw lessons.error
+  if (progress.error) throw progress.error
+  const completed = new Set(progress.data.map((item) => item.lesson_id))
+  return lessons.data.length > 0 && lessons.data.every((lesson) => completed.has(lesson.id))
 }

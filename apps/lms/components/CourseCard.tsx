@@ -305,6 +305,7 @@ export default function CourseCard({
             <Clock className="w-4 h-4 mr-1" />
             <span>{(course as any).totalHours || 0} hours</span>
           </div>
+          <div className="flex items-center"><span>{Number(course.pd_hours ?? 0)} PD hours</span></div>
           <div className="flex items-center">
             <Banknote className="w-4 h-4 mr-1" />
             <span>

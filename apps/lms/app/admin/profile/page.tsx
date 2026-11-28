@@ -17,6 +17,7 @@ import AdminProfileSkeleton from "@/components/AdminProfileSkeleton"
 import { useProfile, useUpdateProfile } from "@/lib/react-query/hooks"
 import { useRealtimeProfile } from "@/lib/react-query/hooks/useRealtime"
 import { toast } from "sonner"
+import { PdReminderSettings } from "@/components/PdReminderSettings"
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -203,6 +204,7 @@ export default function ProfilePage() {
       ) : (
         <>
       <h1 className="text-3xl font-bold text-primary mb-8">Profile</h1>
+      <div className="mb-8"><PdReminderSettings userId={authUser?.id} /></div>
       {error && (
         <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
           <p className="text-sm text-destructive">{error}</p>

@@ -31,12 +31,6 @@ export async function middleware(request: NextRequest) {
   }
   const url = request.nextUrl.clone()
 
-  // Always redirect root to learner login first
-  if (url.pathname === "/") {
-    url.pathname = "/auth/learner/login"
-    return NextResponse.redirect(url)
-  }
-
   // Use Supabase session check with error handling
   let supabaseResponse
   try {

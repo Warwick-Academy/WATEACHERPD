@@ -202,23 +202,30 @@ test("draft saves, publishes and reloads lesson levels; omitted legacy levels ar
     "@/lib/lesson-levels": levels,
   })
   const lesson = (id, selected) => ({ id, title: "Lesson", type: "text", content: {}, settings: {}, quiz: { enabled: false, questions: [] }, ...(selected === undefined ? {} : { levels: selected }) })
-  const save = (lessons, isPublished = false) => route.POST({ json: async () => ({ courseId: 1, isPublished, courseData: { basicInfo: { title: "Course" }, lessons } }) })
+  const save = (lessons, isPublished = false, pdHours) => route.POST({ json: async () => ({ courseId: 1, isPublished, courseData: { basicInfo: { title: "Course", ...(pdHours === undefined ? {} : { pdHours }) }, lessons } }) })
 
   const invalid = await save([lesson("10", ["invalid"])])
   assert.equal(invalid.status, 400)
   assert.deepEqual(db.tables.lessons[0].levels, [])
 
-  const saved = await save([lesson("10", ["beginner"]), lesson("lesson-copy", ["intermediate", "advanced"])], true)
+  for (const hours of ["-1", "100.01", "1.234"]) {
+    assert.equal((await save([lesson("10", [])], false, hours)).status, 400)
+    assert.equal((await save([lesson("10", [])], true, hours)).status, 400)
+  }
+  const saved = await save([lesson("10", ["beginner"]), lesson("lesson-copy", ["intermediate", "advanced"])], true, "100")
   assert.equal(saved.status, 200, JSON.stringify(saved.body))
   assert.equal(db.tables.courses[0].is_published, true)
+  assert.equal(db.tables.courses[0].pd_hours, 100)
   assert.deepEqual(db.tables.lessons.map((row) => row.levels), [["beginner"], ["intermediate", "advanced"]])
 
   const reloaded = await route.GET({ url: "http://localhost/api/courses/drafts?courseId=1" })
   assert.equal(reloaded.status, 200, JSON.stringify(reloaded.body))
+  assert.equal(reloaded.body.course.pd_hours, 100)
   assert.deepEqual(reloaded.body.course.lessons.map((row) => row.levels), [["beginner"], ["intermediate", "advanced"]])
 
   const savedAgain = await save(db.tables.lessons.map((row) => lesson(String(row.id), undefined)))
   assert.equal(savedAgain.status, 200)
+  assert.equal(db.tables.courses[0].pd_hours, 100)
   assert.deepEqual(db.tables.lessons.map((row) => row.levels), [["beginner"], ["intermediate", "advanced"]])
 
   const cleared = await save(db.tables.lessons.map((row) => lesson(String(row.id), [])))

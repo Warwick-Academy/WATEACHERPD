@@ -13,6 +13,7 @@ import {
   HelpCircle,
   Settings,
   LogOut,
+  Clock,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -24,7 +25,9 @@ import { logout } from "../utils/logout"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface MobileMenuProps {
-  userType: "user" | "admin" | "instructor"
+  userType: "user" | "admin" | "instructor" | "leadership"
+  isLeadership?: boolean
+  isFeedbackLeader?: boolean
   user?: {
     name: string
     profileImage: string
@@ -39,7 +42,12 @@ interface SidebarItem {
   isLogout?: boolean
 }
 
-export default function MobileMenu({ userType, user }: MobileMenuProps) {
+export default function MobileMenu({
+  userType,
+  user,
+  isLeadership = false,
+  isFeedbackLeader = false,
+}: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
@@ -49,21 +57,28 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
     setMounted(true)
   }, [])
 
-  const menuItems = {
+  const menuItems: Record<"user" | "admin" | "instructor" | "leadership", SidebarItem[]> = {
     user: [
-      { href: "/learner/dashboard", icon: Home, label: "Home" },
-      { href: "/learner/courses", icon: BookOpen, label: "Courses" },
+      { href: "/pd", icon: Home, label: "My PD" },
+      { href: "/learner/courses", icon: BookOpen, label: "Training Courses" },
       { href: "/learner/profile", icon: User, label: "Profile" },
     ],
     admin: [
-      { href: "/admin/dashboard", icon: Home, label: "Home" },
-      { href: "/admin/courses", icon: BookOpen, label: "Courses" },
+      { href: "/pd", icon: Home, label: "My PD" },
+      { href: "/learner/courses", icon: BookOpen, label: "Training Courses" },
+      { href: "/admin/courses", icon: BookOpen, label: "Training admin" },
       { href: "/admin/profile", icon: User, label: "Profile" },
     ],
     instructor: [
       { href: "/admin/dashboard", icon: Home, label: "Home" },
       { href: "/admin/courses", icon: BookOpen, label: "Courses" },
-      { href: "/admin/profile", icon: User, label: "Profile" },
+      { href: "/learner/profile", icon: User, label: "Profile" },
+    ],
+    leadership: [
+      { href: "/pd", icon: Home, label: "My PD" },
+      { href: "/learner/courses", icon: BookOpen, label: "Training Courses" },
+      { href: "/pd/admin/reports", icon: BarChart, label: "Reports" },
+      { href: "/learner/profile", icon: User, label: "Profile" },
     ],
   }
 
@@ -75,17 +90,49 @@ export default function MobileMenu({ userType, user }: MobileMenuProps) {
 
   // Add settings only for admin (not instructor)
   if (userType === "admin") {
-    adminSidebarItems.push({ href: "/admin/settings", label: "Settings", icon: Settings })
+    adminSidebarItems.push({ href: "/admin/settings", label: "Training Settings", icon: Settings })
   }
 
   adminSidebarItems.push({ href: "#", label: "Log Out", icon: LogOut, isLogout: true })
 
-  const sidebarItems: Record<MobileMenuProps["userType"], SidebarItem[]> = {
+  const sidebarItems: Record<"user" | "admin" | "instructor" | "leadership", SidebarItem[]> = {
     user: [
+      { href: "/pd", label: "My PD", icon: Home },
+      { href: "/pd/goals", label: "My Goals", icon: BarChart },
+      { href: "/pd/observations", label: "Observations", icon: MessageSquare },
+      { href: "/pd/cpd", label: "CPD Log", icon: Clock },
+      { href: "/learner/courses", label: "Training Courses", icon: BookOpen },
+      ...(isFeedbackLeader ? [{ href: "/pd/team", label: "My Team", icon: Users }] : []),
       { href: "#", label: "Log Out", icon: LogOut, isLogout: true },
     ],
-    admin: adminSidebarItems,
-    instructor: adminSidebarItems,
+    admin: [
+      { href: "/pd", label: "My PD", icon: Home },
+      { href: "/pd/goals", label: "My Goals", icon: BarChart },
+      { href: "/pd/observations", label: "Observations", icon: MessageSquare },
+      { href: "/pd/cpd", label: "CPD Log", icon: Clock },
+      { href: "/learner/courses", label: "Training Courses", icon: BookOpen },
+      { href: "/pd/team", label: "My Team", icon: Users },
+      { href: "/pd/admin/staff", label: "Staff", icon: Users },
+      { href: "/pd/admin/leaders", label: "Feedback Leaders", icon: Users },
+      { href: "/pd/admin/school-goals", label: "School Goals", icon: BarChart },
+      { href: "/pd/admin/forms", label: "Observation Forms", icon: MessageSquare },
+      { href: "/pd/admin/cpd", label: "Bulk CPD", icon: Clock },
+      { href: "/pd/admin/reports", label: "Reports", icon: BarChart },
+      { href: "/pd/admin/settings", label: "Years & Settings", icon: Settings },
+      { href: "/admin/courses", label: "Training admin", icon: BookOpen },
+      { href: "#", label: "Log Out", icon: LogOut, isLogout: true },
+    ],
+    instructor: [...(isFeedbackLeader ? [{ href: "/pd/team", label: "My Team", icon: Users }] : []), ...adminSidebarItems],
+    leadership: [
+      { href: "/pd", label: "My PD", icon: Home },
+      { href: "/pd/goals", label: "My Goals", icon: BarChart },
+      { href: "/pd/observations", label: "Observations", icon: MessageSquare },
+      { href: "/pd/cpd", label: "CPD Log", icon: Clock },
+      { href: "/learner/courses", label: "Training Courses", icon: BookOpen },
+      ...(isFeedbackLeader ? [{ href: "/pd/team", label: "My Team", icon: Users }] : []),
+      { href: "/pd/admin/reports", label: "Reports", icon: BarChart },
+      { href: "#", label: "Log Out", icon: LogOut, isLogout: true },
+    ],
   }
 
   const currentMenu = menuItems[userType] || menuItems.admin
